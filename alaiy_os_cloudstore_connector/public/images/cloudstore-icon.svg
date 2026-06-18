@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="12" fill="#0f172a"/>
+  <!-- Store body -->
+  <rect x="10" y="22" width="28" height="18" rx="2" fill="#e2e8f0"/>
+  <!-- Roofline / awning -->
+  <path d="M8 22 L24 12 L40 22 Z" fill="#e2e8f0"/>
+  <!-- Door -->
+  <rect x="20" y="30" width="8" height="10" rx="1" fill="#0f172a"/>
+  <!-- Left window -->
+  <rect x="12" y="25" width="5" height="5" rx="1" fill="#0f172a" opacity="0.5"/>
+  <!-- Right window -->
+  <rect x="31" y="25" width="5" height="5" rx="1" fill="#0f172a" opacity="0.5"/>
+  <!-- Sign bar on awning -->
+  <rect x="16" y="22" width="16" height="4" rx="0" fill="#2490ef"/>
+</svg>
