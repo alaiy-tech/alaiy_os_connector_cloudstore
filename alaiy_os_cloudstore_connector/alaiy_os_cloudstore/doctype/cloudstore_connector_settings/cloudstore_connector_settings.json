@@ -1,0 +1,75 @@
+{
+ "creation": "2026-06-18 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "cs_api_url",
+  "cs_bearer_token",
+  "cs_page_size",
+  "cs_sync_warehouse",
+  "cs_price_list"
+ ],
+ "fields": [
+  {
+   "description": "Production: http://api.fashiondealer.net | Sandbox: https://sandbox.csplatform.io:9950",
+   "fieldname": "cs_api_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "API URL"
+  },
+  {
+   "description": "Format: {shop_id}-{user_id}:{secret}",
+   "fieldname": "cs_bearer_token",
+   "fieldtype": "Password",
+   "label": "Bearer Token"
+  },
+  {
+   "default": "250",
+   "description": "Items per page for paginated catalog sync. Max 250. (~3,521 items = ~15 pages at 250).",
+   "fieldname": "cs_page_size",
+   "fieldtype": "Int",
+   "label": "Page Size"
+  },
+  {
+   "description": "ERPNext Warehouse to receive Cloudstore inventory. Maps to whs[].wh_id.$oid.",
+   "fieldname": "cs_sync_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Sync Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "description": "Price List where Cloudstore sale_price records are stored.",
+   "fieldname": "cs_price_list",
+   "fieldtype": "Link",
+   "label": "Selling Price List",
+   "options": "Price List"
+  }
+ ],
+ "is_single": 1,
+ "links": [],
+ "modified": "2026-06-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Alaiy OS Cloudstore",
+ "name": "Cloudstore Connector Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
