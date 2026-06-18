@@ -18,7 +18,7 @@ def test_connection():
 
     import requests
 
-    url = f"{api_url}/shop/v1/categories/roots"
+    url = f"{api_url}/categories/tree"
     try:
         resp = requests.get(
             url,
