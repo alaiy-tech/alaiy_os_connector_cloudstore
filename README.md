@@ -1,0 +1,1 @@
+# alaiy_os_cloudstore_connector
