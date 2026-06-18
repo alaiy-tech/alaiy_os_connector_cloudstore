@@ -1,0 +1,2 @@
+include MANIFEST.in
+recursive-include alaiy_os_cloudstore_connector *.json *.js *.css *.html *.svg *.png *.txt
