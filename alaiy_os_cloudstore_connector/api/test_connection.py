@@ -19,6 +19,7 @@ def test_connection():
     import requests
 
     url = f"{api_url}/categories/tree"
+    debug_prefix = f"[url={url!r} tok_len={len(bearer_token)} tok_start={bearer_token[:6]!r}] "
     try:
         resp = requests.get(
             url,
@@ -28,11 +29,11 @@ def test_connection():
         if resp.status_code == 200:
             return {"success": True, "message": f"Connected successfully ({resp.status_code})"}
         elif resp.status_code == 401:
-            return {"success": False, "message": "Authentication failed — check your Bearer Token."}
+            return {"success": False, "message": debug_prefix + "Authentication failed — check your Bearer Token."}
         elif resp.status_code == 403:
-            return {"success": False, "message": "Access forbidden — verify your shop credentials."}
+            return {"success": False, "message": debug_prefix + "Access forbidden — verify your shop credentials."}
         else:
-            return {"success": False, "message": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+            return {"success": False, "message": debug_prefix + f"HTTP {resp.status_code}: {resp.text[:200]}"}
     except requests.exceptions.ConnectionError:
         return {"success": False, "message": f"Could not connect to {api_url}. Check the API URL."}
     except requests.exceptions.Timeout:
