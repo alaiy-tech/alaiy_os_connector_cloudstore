@@ -302,10 +302,19 @@ def _ensure_attribute_value(attribute_name: str, value: str):
     """Add a value to an Item Attribute's values table if not already present."""
     if not value or not attribute_name:
         return
-    # Retry up to 5 times to handle Frappe's optimistic-lock conflict when
-    # multiple workers update the same Item Attribute concurrently.
+
+    _RETRYABLE = ("modified after you have opened", "must appear only once")
+
     last_exc = None
     for _attempt in range(5):
+        # Always re-check the DB directly to avoid stale in-memory state.
+        exists = frappe.db.sql(
+            "SELECT 1 FROM `tabItem Attribute Value`"
+            " WHERE parent=%s AND parenttype='Item Attribute' AND attribute_value=%s LIMIT 1",
+            (attribute_name, value),
+        )
+        if exists:
+            return
         try:
             attr_doc = frappe.get_doc("Item Attribute", attribute_name)
             existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
@@ -321,10 +330,11 @@ def _ensure_attribute_value(attribute_name: str, value: str):
             return
         except Exception as exc:
             last_exc = exc
-            if "modified after you have opened" not in str(exc):
+            exc_str = str(exc)
+            if not any(retryable in exc_str for retryable in _RETRYABLE):
                 raise
             # MariaDB REPEATABLE READ: rollback the stale transaction so the
-            # next frappe.get_doc() sees the latest committed snapshot.
+            # next frappe.get_doc() and SQL check see the latest committed snapshot.
             frappe.db.rollback()
     raise last_exc
 
