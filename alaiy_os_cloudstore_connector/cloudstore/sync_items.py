@@ -305,12 +305,26 @@ def _ensure_attribute_value(attribute_name: str, value: str):
     attr_doc = frappe.get_doc("Item Attribute", attribute_name)
     existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
     if value not in existing_values:
+        existing_abbrs = {row.abbr for row in (attr_doc.item_attribute_values or [])}
+        abbr = _unique_abbr(value, existing_abbrs)
         attr_doc.append("item_attribute_values", {
             "attribute_value": value,
-            "abbr": value[:3],
+            "abbr": abbr,
         })
         attr_doc.save(ignore_permissions=True)
         frappe.db.commit()
+
+
+def _unique_abbr(value: str, existing: set) -> str:
+    """Generate a unique abbreviation (up to 10 chars) not already in existing."""
+    base = value[:10]
+    if base not in existing:
+        return base
+    for i in range(1, 1000):
+        candidate = value[:8] + str(i)
+        if candidate not in existing:
+            return candidate
+    return value
 
 
 def _ensure_brand(brand_name: str):
