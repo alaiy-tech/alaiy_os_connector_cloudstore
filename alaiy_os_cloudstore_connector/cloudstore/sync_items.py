@@ -125,6 +125,20 @@ def _ensure_item_attributes():
             attr.attribute_name = attr_name
             attr.numeric_values = 0
             attr.insert(ignore_permissions=True)
+
+    # Ensure the "Nos" UOM exists (mandatory on every ERPNext Item)
+    if not frappe.db.exists("UOM", "Nos"):
+        uom = frappe.new_doc("UOM")
+        uom.uom_name = "Nos"
+        uom.insert(ignore_permissions=True)
+
+    # Ensure a root Item Group exists as fallback
+    if not frappe.db.exists("Item Group", "All Item Groups"):
+        root = frappe.new_doc("Item Group")
+        root.item_group_name = "All Item Groups"
+        root.is_group = 1
+        root.insert(ignore_permissions=True)
+
     frappe.db.commit()
 
 
@@ -187,13 +201,13 @@ def _upsert_item(item_data: dict, settings) -> str:
         template = frappe.new_doc("Item")
         template.item_code = sku_parent
         template.has_variants = 1
+        template.stock_uom = "Nos"
         template_is_new = True
 
     template.item_name = title
     if description:
         template.description = description
-    if item_group:
-        template.item_group = item_group
+    template.item_group = item_group or "All Item Groups"
     if brand:
         template.brand = brand
     if image_url:
@@ -220,13 +234,13 @@ def _upsert_item(item_data: dict, settings) -> str:
     if variant_is_new:
         variant = frappe.new_doc("Item")
         variant.item_code = sku
+        variant.stock_uom = "Nos"
     else:
         variant = frappe.get_doc("Item", sku)
 
     variant.variant_of = sku_parent
     variant.item_name = title
-    if item_group:
-        variant.item_group = item_group
+    variant.item_group = item_group or "All Item Groups"
     if brand:
         variant.brand = brand
     if image_url:
