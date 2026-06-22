@@ -308,9 +308,11 @@ def _ensure_attribute_value(attribute_name: str, value: str):
     last_exc = None
     for _attempt in range(5):
         # Always re-check the DB directly to avoid stale in-memory state.
+        # Use BINARY for case-sensitive comparison so "Silver" and "silver" are
+        # treated as distinct values (Python validation is also case-sensitive).
         exists = frappe.db.sql(
             "SELECT 1 FROM `tabItem Attribute Value`"
-            " WHERE parent=%s AND parenttype='Item Attribute' AND attribute_value=%s LIMIT 1",
+            " WHERE parent=%s AND parenttype='Item Attribute' AND BINARY attribute_value=%s LIMIT 1",
             (attribute_name, value),
         )
         if exists:
