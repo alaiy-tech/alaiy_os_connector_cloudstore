@@ -5,7 +5,14 @@ app_description = "Cloudstore (The Corner, Italy) supplier connector for AlaiyOS
 app_email = "dev@alaiy.com"
 app_license = "MIT"
 
-# Register/update this connector in OS Connector Registry after every migration
 after_migrate = [
     "alaiy_os_cloudstore_connector.setup.install.sync_connector_registry"
 ]
+
+scheduler_events = {
+    "cron": {
+        "* * * * *": [
+            "alaiy_os_cloudstore_connector.cloudstore.sync_jobs.check_and_enqueue"
+        ]
+    }
+}

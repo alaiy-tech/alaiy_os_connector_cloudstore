@@ -1,0 +1,129 @@
+{
+ "autoname": "CS-SYNC-.YYYY.-.MM.-.DD.-.######",
+ "creation": "2026-06-22 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sync_type",
+  "trigger",
+  "status",
+  "started_at",
+  "finished_at",
+  "items_processed",
+  "items_created",
+  "items_updated",
+  "items_failed",
+  "pages_total",
+  "pages_done",
+  "error_message",
+  "log_messages"
+ ],
+ "fields": [
+  {
+   "fieldname": "sync_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sync Type",
+   "options": "categories\nitems",
+   "reqd": 1
+  },
+  {
+   "fieldname": "trigger",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Trigger",
+   "options": "scheduled\nmanual",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "running\nsuccess\nfailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Started At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At"
+  },
+  {
+   "fieldname": "items_processed",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Items Processed"
+  },
+  {
+   "fieldname": "items_created",
+   "fieldtype": "Int",
+   "label": "Items Created"
+  },
+  {
+   "fieldname": "items_updated",
+   "fieldtype": "Int",
+   "label": "Items Updated"
+  },
+  {
+   "fieldname": "items_failed",
+   "fieldtype": "Int",
+   "label": "Items Failed"
+  },
+  {
+   "fieldname": "pages_total",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Pages Total"
+  },
+  {
+   "fieldname": "pages_done",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Pages Done"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  },
+  {
+   "fieldname": "log_messages",
+   "fieldtype": "Long Text",
+   "label": "Log Messages"
+  }
+ ],
+ "is_submittable": 0,
+ "links": [],
+ "modified": "2026-06-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Alaiy OS Cloudstore",
+ "name": "Cloudstore Sync Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

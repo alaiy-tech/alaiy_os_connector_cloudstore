@@ -9,7 +9,9 @@
   "cs_bearer_token",
   "cs_page_size",
   "cs_sync_warehouse",
-  "cs_price_list"
+  "cs_price_list",
+  "cs_category_sync_interval",
+  "cs_items_sync_interval"
  ],
  "fields": [
   {
@@ -45,11 +47,27 @@
    "fieldtype": "Link",
    "label": "Selling Price List",
    "options": "Price List"
+  },
+  {
+   "default": "Disabled",
+   "description": "How often to automatically sync the category tree from Cloudstore",
+   "fieldname": "cs_category_sync_interval",
+   "fieldtype": "Select",
+   "label": "Category Sync Interval",
+   "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
+  },
+  {
+   "default": "Disabled",
+   "description": "How often to automatically sync items/products from Cloudstore",
+   "fieldname": "cs_items_sync_interval",
+   "fieldtype": "Select",
+   "label": "Items Sync Interval",
+   "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
   }
  ],
  "is_single": 1,
  "links": [],
- "modified": "2026-06-18 00:00:00.000000",
+ "modified": "2026-06-22 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Alaiy OS Cloudstore",
  "name": "Cloudstore Connector Settings",
