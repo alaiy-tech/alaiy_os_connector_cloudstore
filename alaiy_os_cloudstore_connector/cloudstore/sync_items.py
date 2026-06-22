@@ -250,9 +250,9 @@ def _upsert_item(item_data: dict, settings) -> str:
     variant.cs_cloudstore_source = "cloudstore"
     variant.cs_last_synced_at = now_datetime()
 
-    # Variant attributes — ensure each value exists in the Item Attribute first
-    size_val = apparel_size or "N/A"
-    color_val = color or "N/A"
+    # Normalize to consistent casing so "silver"/"SILVER"/"Silver" are the same
+    size_val = (apparel_size or "N/A").strip().upper()
+    color_val = (color or "N/A").strip().title()
     _ensure_attribute_value("Size", size_val)
     _ensure_attribute_value("Color", color_val)
 
