@@ -35,6 +35,21 @@ def sync_connector_registry():
         doc.save(ignore_permissions=True)
 
     frappe.db.commit()
+    _update_alaiy_os_sidebar()
+
+
+def _update_alaiy_os_sidebar():
+    """Re-run alaiy_os_core's sidebar provisioning so the Cloudstore Logs
+    link appears in the sidebar after this connector is installed/migrated."""
+    try:
+        from alaiy_os_core.setup.install import create_or_update_workspace_sidebar
+        create_or_update_workspace_sidebar()
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(
+            title="Cloudstore connector: sidebar update failed",
+            message=frappe.get_traceback(),
+        )
 
 
 def setup_custom_fields():
