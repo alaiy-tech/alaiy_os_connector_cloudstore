@@ -262,6 +262,12 @@ def _upsert_item(item_data: dict, settings) -> str:
     variant.append("attributes", {"attribute": "Size",  "attribute_value": size_val})
     variant.append("attributes", {"attribute": "Color", "attribute_value": color_val})
 
+    # ERPNext before_save checks that stock_uom appears in the uoms conversion
+    # table even when ignore_validate=True.  Ensure it's present.
+    existing_uoms = [row.uom for row in (variant.uoms or [])]
+    if variant.stock_uom not in existing_uoms:
+        variant.append("uoms", {"uom": variant.stock_uom, "conversion_factor": 1.0})
+
     # Bypass ERPNext's attribute value pre-defined list validation.
     # The Size/Color ItemAttribute DocTypes exist; their values table is
     # managed separately and does not need to cover every value we import.
