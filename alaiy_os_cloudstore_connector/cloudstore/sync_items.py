@@ -323,6 +323,9 @@ def _ensure_attribute_value(attribute_name: str, value: str):
             last_exc = exc
             if "modified after you have opened" not in str(exc):
                 raise
+            # MariaDB REPEATABLE READ: rollback the stale transaction so the
+            # next frappe.get_doc() sees the latest committed snapshot.
+            frappe.db.rollback()
     raise last_exc
 
 
