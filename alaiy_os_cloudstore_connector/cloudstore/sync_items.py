@@ -217,10 +217,14 @@ def _upsert_item(item_data: dict, settings) -> str:
     if brand:
         _ensure_brand(brand)
 
-    # Ensure variant attributes declared on template
+    # Declare Size and Color attributes on the template
     _ensure_template_attribute(template, "Size")
     _ensure_template_attribute(template, "Color")
 
+    # Skip ERPNext's variant attribute validation — we manage data from an
+    # external source and don't need the attribute values pre-defined in the
+    # Item Attribute table.
+    template.flags.ignore_validate = True
     if template_is_new:
         template.insert(ignore_permissions=True)
     else:
@@ -250,20 +254,18 @@ def _upsert_item(item_data: dict, settings) -> str:
     variant.cs_cloudstore_source = "cloudstore"
     variant.cs_last_synced_at = now_datetime()
 
-    # Normalize to consistent casing so "silver"/"SILVER"/"Silver" are the same
+    # Normalize casing: uppercase for sizes (M, L, XL, 36…), title for colors
     size_val = (apparel_size or "N/A").strip().upper()
     color_val = (color or "N/A").strip().title()
-    _ensure_attribute_value("Size", size_val)
-    _ensure_attribute_value("Color", color_val)
 
-    _set_variant_attributes(
-        variant,
-        [
-            {"attribute": "Size", "attribute_value": size_val},
-            {"attribute": "Color", "attribute_value": color_val},
-        ],
-    )
+    variant.set("attributes", [])
+    variant.append("attributes", {"attribute": "Size",  "attribute_value": size_val})
+    variant.append("attributes", {"attribute": "Color", "attribute_value": color_val})
 
+    # Bypass ERPNext's attribute value pre-defined list validation.
+    # The Size/Color ItemAttribute DocTypes exist; their values table is
+    # managed separately and does not need to cover every value we import.
+    variant.flags.ignore_validate = True
     if variant_is_new:
         variant.insert(ignore_permissions=True)
     else:
@@ -296,61 +298,6 @@ def _upsert_item(item_data: dict, settings) -> str:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-
-def _ensure_attribute_value(attribute_name: str, value: str):
-    """Add a value to an Item Attribute's values table if not already present."""
-    if not value or not attribute_name:
-        return
-
-    _RETRYABLE = ("modified after you have opened", "must appear only once")
-
-    last_exc = None
-    for _attempt in range(5):
-        # Always re-check the DB directly to avoid stale in-memory state.
-        # Use BINARY for case-sensitive comparison so "Silver" and "silver" are
-        # treated as distinct values (Python validation is also case-sensitive).
-        exists = frappe.db.sql(
-            "SELECT 1 FROM `tabItem Attribute Value`"
-            " WHERE parent=%s AND parenttype='Item Attribute' AND BINARY attribute_value=%s LIMIT 1",
-            (attribute_name, value),
-        )
-        if exists:
-            return
-        try:
-            attr_doc = frappe.get_doc("Item Attribute", attribute_name)
-            existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
-            if value not in existing_values:
-                existing_abbrs = {row.abbr for row in (attr_doc.item_attribute_values or [])}
-                abbr = _unique_abbr(value, existing_abbrs)
-                attr_doc.append("item_attribute_values", {
-                    "attribute_value": value,
-                    "abbr": abbr,
-                })
-                attr_doc.save(ignore_permissions=True)
-                frappe.db.commit()
-            return
-        except Exception as exc:
-            last_exc = exc
-            exc_str = str(exc)
-            if not any(retryable in exc_str for retryable in _RETRYABLE):
-                raise
-            # MariaDB REPEATABLE READ: rollback the stale transaction so the
-            # next frappe.get_doc() and SQL check see the latest committed snapshot.
-            frappe.db.rollback()
-    raise last_exc
-
-
-def _unique_abbr(value: str, existing: set) -> str:
-    """Generate a unique abbreviation (up to 10 chars) not already in existing."""
-    base = value[:10]
-    if base not in existing:
-        return base
-    for i in range(1, 1000):
-        candidate = value[:8] + str(i)
-        if candidate not in existing:
-            return candidate
-    return value
 
 
 def _ensure_brand(brand_name: str):
@@ -397,16 +344,6 @@ def _ensure_template_attribute(template, attribute_name: str):
     existing = [row.attribute for row in (template.attributes or [])]
     if attribute_name not in existing:
         template.append("attributes", {"attribute": attribute_name})
-
-
-def _set_variant_attributes(variant, attribute_rows: list):
-    """
-    Replace the variant's attributes child table with the provided rows.
-    Each element of attribute_rows: {"attribute": str, "attribute_value": str}.
-    """
-    variant.set("attributes", [])
-    for row in attribute_rows:
-        variant.append("attributes", row)
 
 
 def _append_log(log, message: str):
