@@ -250,12 +250,17 @@ def _upsert_item(item_data: dict, settings) -> str:
     variant.cs_cloudstore_source = "cloudstore"
     variant.cs_last_synced_at = now_datetime()
 
-    # Variant attributes
+    # Variant attributes — ensure each value exists in the Item Attribute first
+    size_val = apparel_size or "N/A"
+    color_val = color or "N/A"
+    _ensure_attribute_value("Size", size_val)
+    _ensure_attribute_value("Color", color_val)
+
     _set_variant_attributes(
         variant,
         [
-            {"attribute": "Size", "attribute_value": apparel_size or "N/A"},
-            {"attribute": "Color", "attribute_value": color or "N/A"},
+            {"attribute": "Size", "attribute_value": size_val},
+            {"attribute": "Color", "attribute_value": color_val},
         ],
     )
 
@@ -291,6 +296,21 @@ def _upsert_item(item_data: dict, settings) -> str:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _ensure_attribute_value(attribute_name: str, value: str):
+    """Add a value to an Item Attribute's values table if not already present."""
+    if not value or not attribute_name:
+        return
+    attr_doc = frappe.get_doc("Item Attribute", attribute_name)
+    existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
+    if value not in existing_values:
+        attr_doc.append("item_attribute_values", {
+            "attribute_value": value,
+            "abbr": value[:3],
+        })
+        attr_doc.save(ignore_permissions=True)
+        frappe.db.commit()
 
 
 def _ensure_brand(brand_name: str):
