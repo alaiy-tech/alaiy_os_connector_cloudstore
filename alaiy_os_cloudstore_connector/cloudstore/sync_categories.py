@@ -35,6 +35,7 @@ def run(trigger: str = "scheduled") -> str:
     frappe.db.commit()
 
     try:
+        _ensure_root_item_group()
         client = CloudstoreClient()
         tree = client.get("/categories/tree")
 
@@ -81,6 +82,17 @@ def run_in_background(trigger: str = "manual") -> dict:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _ensure_root_item_group():
+    """Create the ERPNext root Item Group if it doesn't exist yet."""
+    if frappe.db.exists("Item Group", "All Item Groups"):
+        return
+    root = frappe.new_doc("Item Group")
+    root.item_group_name = "All Item Groups"
+    root.is_group = 1
+    root.insert(ignore_permissions=True)
+    frappe.db.commit()
 
 
 def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):

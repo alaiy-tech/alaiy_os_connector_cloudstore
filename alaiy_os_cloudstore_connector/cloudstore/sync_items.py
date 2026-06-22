@@ -200,6 +200,8 @@ def _upsert_item(item_data: dict, settings) -> str:
         template.image = image_url
     template.cs_cloudstore_source = "cloudstore"
     template.cs_parent_sku = sku_parent
+    if brand:
+        _ensure_brand(brand)
 
     # Ensure variant attributes declared on template
     _ensure_template_attribute(template, "Size")
@@ -275,6 +277,17 @@ def _upsert_item(item_data: dict, settings) -> str:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _ensure_brand(brand_name: str):
+    """Create a Brand record if it doesn't exist yet."""
+    if not brand_name:
+        return
+    if not frappe.db.exists("Brand", brand_name):
+        b = frappe.new_doc("Brand")
+        b.brand = brand_name
+        b.insert(ignore_permissions=True)
+        frappe.db.commit()
 
 
 def _pick_locale(locale_dict, fallback: str = "") -> str:

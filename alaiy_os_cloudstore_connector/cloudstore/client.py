@@ -86,7 +86,7 @@ class CloudstoreClient:
             page_size: Items per page — defaults to cs_page_size from settings.
         """
         page_size = page_size or self.page_size
-        page_index = 1
+        page_index = 0  # Cloudstore API is 0-indexed: pages 0 … total_pages-1
         base_params = dict(params or {})
 
         while True:
@@ -102,6 +102,6 @@ class CloudstoreClient:
             yield content, metadata
 
             total_pages = int(metadata.get("total_pages", 1))
-            if page_index >= total_pages:
+            if page_index + 1 >= total_pages:
                 break
             page_index += 1
