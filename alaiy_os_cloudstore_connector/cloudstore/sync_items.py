@@ -302,17 +302,28 @@ def _ensure_attribute_value(attribute_name: str, value: str):
     """Add a value to an Item Attribute's values table if not already present."""
     if not value or not attribute_name:
         return
-    attr_doc = frappe.get_doc("Item Attribute", attribute_name)
-    existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
-    if value not in existing_values:
-        existing_abbrs = {row.abbr for row in (attr_doc.item_attribute_values or [])}
-        abbr = _unique_abbr(value, existing_abbrs)
-        attr_doc.append("item_attribute_values", {
-            "attribute_value": value,
-            "abbr": abbr,
-        })
-        attr_doc.save(ignore_permissions=True)
-        frappe.db.commit()
+    # Retry up to 5 times to handle Frappe's optimistic-lock conflict when
+    # multiple workers update the same Item Attribute concurrently.
+    last_exc = None
+    for _attempt in range(5):
+        try:
+            attr_doc = frappe.get_doc("Item Attribute", attribute_name)
+            existing_values = [row.attribute_value for row in (attr_doc.item_attribute_values or [])]
+            if value not in existing_values:
+                existing_abbrs = {row.abbr for row in (attr_doc.item_attribute_values or [])}
+                abbr = _unique_abbr(value, existing_abbrs)
+                attr_doc.append("item_attribute_values", {
+                    "attribute_value": value,
+                    "abbr": abbr,
+                })
+                attr_doc.save(ignore_permissions=True)
+                frappe.db.commit()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if "modified after you have opened" not in str(exc):
+                raise
+    raise last_exc
 
 
 def _unique_abbr(value: str, existing: set) -> str:
