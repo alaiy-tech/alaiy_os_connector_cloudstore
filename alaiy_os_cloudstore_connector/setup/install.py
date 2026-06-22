@@ -4,8 +4,9 @@ import frappe
 def sync_connector_registry():
     """
     Register or update this connector's row in alaiy_os_core's OS Connector Registry.
-    Called from hooks.py → after_migrate on every bench migrate.
+    Called from hooks.py -> after_migrate on every bench migrate.
     """
+    _fix_settings_as_single()
     setup_custom_fields()
     setup_item_attributes()
 
@@ -108,6 +109,18 @@ def _ensure_custom_fields(doctype, fields):
         cf.search_index = 1 if f.get("search_index") else 0
         cf.module = "Alaiy OS Cloudstore"
         cf.insert(ignore_permissions=True)
+
+
+def _fix_settings_as_single():
+    """
+    Force issingle=1 on Cloudstore Connector Settings.
+    Frappe does not auto-convert an existing DocType from table-based to Single
+    via bench migrate, so we patch it directly every deploy.
+    """
+    frappe.db.sql(
+        "UPDATE `tabDocType` SET issingle=1 WHERE name='Cloudstore Connector Settings' AND issingle=0"
+    )
+    frappe.db.commit()
 
 
 def setup_item_attributes():
