@@ -83,7 +83,14 @@ def run(trigger: str = "scheduled") -> str:
         # one per variant.
         warehouse = _ensure_warehouse((settings.cs_sync_warehouse or "").strip())
         if stock_batch and warehouse:
-            _submit_stock_reconciliation(stock_batch, warehouse)
+            try:
+                _submit_stock_reconciliation(stock_batch, warehouse)
+            except Exception as exc:
+                _append_log(log, f"WARNING: Stock Reconciliation failed: {exc}")
+                frappe.log_error(
+                    title="Cloudstore: stock reconciliation failed",
+                    message=frappe.get_traceback(),
+                )
 
         log.status = "success"
 
@@ -243,6 +250,9 @@ def _upsert_item(item_data: dict, settings) -> tuple:
         variant = frappe.new_doc("Item")
         variant.item_code = sku
         variant.stock_uom = "Nos"
+        # Purge orphaned child rows left by any previous raw-SQL deletion
+        for _tbl in ("tabItem Variant Attribute", "tabUOM Conversion Detail"):
+            frappe.db.sql(f"DELETE FROM `{_tbl}` WHERE parent=%s", sku)
     else:
         variant = frappe.get_doc("Item", sku)
 
@@ -409,9 +419,16 @@ def _submit_stock_reconciliation(entries: list, warehouse: str):
     """Submit one Stock Reconciliation covering all synced variants."""
     if not entries or not warehouse:
         return
+    company = frappe.defaults.get_global_default("company")
+    expense_account = (
+        frappe.get_cached_value("Company", company, "stock_adjustment_account") or ""
+        if company else ""
+    )
     recon = frappe.new_doc("Stock Reconciliation")
     recon.purpose = "Stock Reconciliation"
-    recon.company = frappe.defaults.get_global_default("company")
+    recon.company = company
+    if expense_account:
+        recon.expense_account = expense_account
     for entry in entries:
         recon.append("items", {
             "item_code": entry["item_code"],
