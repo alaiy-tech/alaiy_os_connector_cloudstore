@@ -5,26 +5,19 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "section_credentials",
   "cs_api_url",
   "cs_bearer_token",
-  "section_erpnext_mapping",
+  "section_mapping",
   "cs_supplier",
   "cs_sync_warehouse",
   "cs_buying_price_list",
   "cs_price_list",
-  "cs_markup_pct",
-  "section_sync_config",
+  "section_schedule",
   "cs_page_size",
   "cs_category_sync_interval",
   "cs_items_sync_interval"
  ],
  "fields": [
-  {
-   "fieldname": "section_credentials",
-   "fieldtype": "Section Break",
-   "label": "API Credentials"
-  },
   {
    "description": "Production: http://api.fashiondealer.net | Sandbox: https://sandbox.csplatform.io:9950",
    "fieldname": "cs_api_url",
@@ -39,59 +32,51 @@
    "label": "Bearer Token"
   },
   {
-   "fieldname": "section_erpnext_mapping",
-   "fieldtype": "Section Break",
-   "label": "ERPNext Mapping"
+   "fieldname": "section_mapping",
+   "fieldtype": "Section Break"
   },
   {
-   "description": "Supplier record for Cloudstore. Created automatically on install as \"Cloudstore (The Corner)\".",
+   "description": "Supplier linked to synced items.",
    "fieldname": "cs_supplier",
    "fieldtype": "Link",
    "label": "Supplier",
    "options": "Supplier"
   },
   {
-   "description": "ERPNext Warehouse to receive Cloudstore inventory.",
+   "description": "Warehouse to receive Cloudstore inventory.",
    "fieldname": "cs_sync_warehouse",
    "fieldtype": "Link",
-   "label": "Default Sync Warehouse",
+   "label": "Sync Warehouse",
    "options": "Warehouse"
   },
   {
-   "description": "Price List where Cloudstore buy_price records are stored. Auto-created as \"Cloudstore - Buying\".",
+   "description": "Price list for buy prices from Cloudstore.",
    "fieldname": "cs_buying_price_list",
    "fieldtype": "Link",
    "label": "Buying Price List",
    "options": "Price List"
   },
   {
-   "description": "Price List where Cloudstore sale_price records are stored. Auto-created as \"Cloudstore - Selling\".",
+   "description": "Price list for selling prices.",
    "fieldname": "cs_price_list",
    "fieldtype": "Link",
    "label": "Selling Price List",
    "options": "Price List"
   },
   {
-   "description": "Selling markup over buy_price in percent. Example: 20 means sell at buy_price × 1.20. (Informational — apply manually or in pricing rules.)",
-   "fieldname": "cs_markup_pct",
-   "fieldtype": "Float",
-   "label": "Selling Markup %"
-  },
-  {
-   "fieldname": "section_sync_config",
-   "fieldtype": "Section Break",
-   "label": "Sync Configuration"
+   "fieldname": "section_schedule",
+   "fieldtype": "Section Break"
   },
   {
    "default": "250",
-   "description": "Items per page for paginated catalog sync. Max 250.",
+   "description": "Items per page for catalog sync. Max 250.",
    "fieldname": "cs_page_size",
    "fieldtype": "Int",
    "label": "Page Size"
   },
   {
    "default": "Disabled",
-   "description": "How often to automatically sync the category tree from Cloudstore.",
+   "description": "How often to automatically sync the category tree.",
    "fieldname": "cs_category_sync_interval",
    "fieldtype": "Select",
    "label": "Category Sync Interval",
@@ -99,7 +84,7 @@
   },
   {
    "default": "Disabled",
-   "description": "How often to automatically sync items/products from Cloudstore.",
+   "description": "How often to automatically sync items.",
    "fieldname": "cs_items_sync_interval",
    "fieldtype": "Select",
    "label": "Items Sync Interval",
