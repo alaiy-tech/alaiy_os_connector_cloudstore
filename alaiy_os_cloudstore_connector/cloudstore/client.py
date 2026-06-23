@@ -77,8 +77,12 @@ class CloudstoreClient:
         """
         Generator that iterates all pages of a paginated Cloudstore endpoint.
 
+        Includes loop detection: if an entire page consists only of SKUs already
+        seen on a previous page, the API is looping and we stop early.
+
         Yields:
             (content_list, metadata_dict) tuples, one per page.
+            content_list contains only items not seen on prior pages.
 
         Args:
             path:      URL path, e.g. "/items".
@@ -88,6 +92,7 @@ class CloudstoreClient:
         page_size = page_size or self.page_size
         page_index = 0  # Cloudstore API is 0-indexed: pages 0 … total_pages-1
         base_params = dict(params or {})
+        seen_skus: set = set()
 
         while True:
             page_params = {
@@ -99,7 +104,21 @@ class CloudstoreClient:
             metadata = data.get("_metadata", {})
             content = data.get("content", [])
 
-            yield content, metadata
+            new_items = [item for item in content if item.get("sku") not in seen_skus]
+
+            # If the API returned items but none are new, it's stuck in a loop.
+            if content and not new_items:
+                frappe.log_error(
+                    title="Cloudstore: pagination loop detected",
+                    message=f"Page {page_index} returned 0 new SKUs — stopping early.",
+                )
+                break
+
+            for item in new_items:
+                if item.get("sku"):
+                    seen_skus.add(item["sku"])
+
+            yield new_items, metadata
 
             total_pages = int(metadata.get("total_pages", 1))
             if page_index + 1 >= total_pages:

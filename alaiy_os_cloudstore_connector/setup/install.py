@@ -9,6 +9,8 @@ def sync_connector_registry():
     _fix_settings_as_single()
     setup_custom_fields()
     setup_item_attributes()
+    create_default_supplier()
+    create_default_price_lists()
 
     if not frappe.db.exists("DocType", "OS Connector Registry"):
         return
@@ -53,7 +55,7 @@ def _update_alaiy_os_sidebar():
 
 
 def setup_custom_fields():
-    """Add cs_ custom fields to Item Group and Item if they don't exist yet."""
+    """Add cs_ custom fields to Item Group and Item."""
     item_group_fields = [
         {
             "fieldname": "cs_cloudstore_id",
@@ -63,16 +65,10 @@ def setup_custom_fields():
             "insert_after": "is_group",
         },
         {
-            "fieldname": "cs_external_cat_level",
+            "fieldname": "cs_cat_level",
             "label": "Category Level",
             "fieldtype": "Int",
             "insert_after": "cs_cloudstore_id",
-        },
-        {
-            "fieldname": "cs_cloudstore_source",
-            "label": "Cloudstore Source",
-            "fieldtype": "Data",
-            "insert_after": "cs_external_cat_level",
         },
     ]
 
@@ -85,23 +81,24 @@ def setup_custom_fields():
             "insert_after": "item_code",
         },
         {
-            "fieldname": "cs_parent_sku",
-            "label": "Cloudstore Parent SKU",
+            "fieldname": "cs_sku_parent",
+            "label": "SKU Parent",
             "fieldtype": "Data",
             "search_index": 1,
             "insert_after": "cs_cloudstore_id",
         },
         {
-            "fieldname": "cs_cloudstore_source",
-            "label": "Cloudstore Source",
+            "fieldname": "cs_mnf_color_code",
+            "label": "Manufacturer Color Code",
             "fieldtype": "Data",
-            "insert_after": "cs_parent_sku",
+            "insert_after": "cs_sku_parent",
         },
         {
             "fieldname": "cs_last_synced_at",
             "label": "Last Synced from Cloudstore",
             "fieldtype": "Datetime",
-            "insert_after": "cs_cloudstore_source",
+            "read_only": 1,
+            "insert_after": "cs_mnf_color_code",
         },
     ]
 
@@ -122,6 +119,7 @@ def _ensure_custom_fields(doctype, fields):
         cf.fieldtype = f["fieldtype"]
         cf.insert_after = f.get("insert_after", "")
         cf.search_index = 1 if f.get("search_index") else 0
+        cf.read_only = 1 if f.get("read_only") else 0
         cf.module = "Alaiy OS Cloudstore"
         cf.insert(ignore_permissions=True)
 
@@ -146,4 +144,38 @@ def setup_item_attributes():
             attr.attribute_name = attr_name
             attr.numeric_values = 0
             attr.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+
+def create_default_supplier():
+    """Create a placeholder Supplier record for Cloudstore if it doesn't exist."""
+    supplier_name = "Cloudstore (The Corner)"
+    group_name = "International Brands"
+    if not frappe.db.exists("Supplier Group", group_name):
+        sg = frappe.new_doc("Supplier Group")
+        sg.supplier_group_name = group_name
+        sg.insert(ignore_permissions=True)
+    if not frappe.db.exists("Supplier", supplier_name):
+        s = frappe.new_doc("Supplier")
+        s.supplier_name = supplier_name
+        s.supplier_type = "Company"
+        s.supplier_group = group_name
+        s.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+
+def create_default_price_lists():
+    """Create Cloudstore buying and selling price lists if absent."""
+    for pl_name, is_buying, is_selling in [
+        ("Cloudstore - Buying", 1, 0),
+        ("Cloudstore - Selling", 0, 1),
+    ]:
+        if not frappe.db.exists("Price List", pl_name):
+            pl = frappe.new_doc("Price List")
+            pl.price_list_name = pl_name
+            pl.buying = is_buying
+            pl.selling = is_selling
+            pl.currency = "INR"
+            pl.enabled = 1
+            pl.insert(ignore_permissions=True)
     frappe.db.commit()
