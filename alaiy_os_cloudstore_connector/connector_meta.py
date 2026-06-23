@@ -15,6 +15,7 @@ connector_meta = {
     "test_method": "alaiy_os_cloudstore_connector.api.test_connection.test_connection",
     "sync_categories_method": "alaiy_os_cloudstore_connector.api.sync.trigger_categories_sync",
     "sync_items_method": "alaiy_os_cloudstore_connector.api.sync.trigger_items_sync",
+    "sync_status_method": "alaiy_os_cloudstore_connector.api.sync.get_sync_status",
     "is_enabled": 0,
     "connection_status": "untested",
 }
