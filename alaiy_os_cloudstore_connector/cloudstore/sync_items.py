@@ -154,6 +154,17 @@ def _ensure_item_attributes():
         root.is_group = 1
         root.insert(ignore_permissions=True)
 
+    if not frappe.db.exists("Custom Field", "Item-slideshow"):
+        frappe.get_doc({
+            "doctype": "Custom Field",
+            "dt": "Item",
+            "fieldname": "slideshow",
+            "label": "Slideshow",
+            "fieldtype": "Link",
+            "options": "Website Slideshow",
+            "insert_after": "image",
+        }).insert(ignore_permissions=True)
+
     frappe.db.commit()
 
 
