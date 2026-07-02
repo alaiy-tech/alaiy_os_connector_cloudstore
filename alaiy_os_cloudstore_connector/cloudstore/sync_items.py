@@ -165,6 +165,15 @@ def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
     values must be registered up front or every variant save fails with
     "Attribute Value X is not valid for the selected attribute Y".
 
+    Deliberately does NOT set ignore_validate on the Item Attribute doc:
+    ItemAttribute.validate() resets frappe.flags.attribute_values to None as
+    a side effect, which forces erpnext.controllers.item_variant's
+    process-lifetime cache of valid attribute values to re-fetch from the DB
+    on the next variant save. Skipping validate() here would leave that
+    cache stale for the rest of the sync run, so every value registered
+    after the first cache fill would still fail validation despite already
+    being committed to the DB.
+
     `cache` (Item Attribute name -> set of known values) is populated lazily
     per sync run to avoid re-querying the same attribute for every item.
     """
@@ -182,18 +191,8 @@ def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
         return
     attr = frappe.get_doc("Item Attribute", attribute_name)
     attr.append("item_attribute_values", {"attribute_value": value, "abbr": value})
-    attr.flags.ignore_validate = True
     attr.save(ignore_permissions=True)
     known.add(value)
-
-    # erpnext.controllers.item_variant.get_attribute_values() caches its
-    # result in frappe.flags.attribute_values for the rest of this process
-    # and never re-fetches it — without this, every value registered after
-    # the first cache fill stays invisible to validation for the whole sync
-    # run, even though it's already committed to the DB.
-    cached = getattr(frappe.flags, "attribute_values", None)
-    if cached is not None:
-        cached.setdefault(attribute_name.lower(), []).append(value)
 
 
 # ---------------------------------------------------------------------------
