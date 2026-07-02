@@ -119,19 +119,21 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
             continue
 
         try:
+            # Match strictly by supplier_id (the Cloudstore category oid).
+            # Never fall back to a name match — category names repeat across
+            # different branches of the tree (e.g. "Jeans" under both Man and
+            # Woman are different oids), and matching by name alone grabs the
+            # wrong node from an unrelated branch, corrupting the tree.
             existing_name = frappe.db.get_value(
                 "Item Group",
                 {"supplier_id": oid},
                 "name",
             )
-            # Fall back to name match so we adopt existing groups instead of
-            # failing with a duplicate-key error.
-            if not existing_name:
-                existing_name = frappe.db.get_value("Item Group", node_name, "name")
 
             if existing_name:
                 doc = frappe.get_doc("Item Group", existing_name)
-                doc.item_group_name = node_name
+                doc.item_group_name = _unique_item_group_name(
+                    node_name, oid, current_name=doc.item_group_name)
                 doc.parent_item_group = parent_name
                 doc.supplier_id = oid
                 doc.supplier_cat_level = level
@@ -140,7 +142,7 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
                 stats["updated"] += 1
             else:
                 doc = frappe.new_doc("Item Group")
-                doc.item_group_name = node_name
+                doc.item_group_name = _unique_item_group_name(node_name, oid)
                 doc.parent_item_group = parent_name
                 doc.supplier_id = oid
                 doc.supplier_cat_level = level
@@ -175,6 +177,25 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
                 title=f"Cloudstore category sync error: {node_name}",
                 message=frappe.get_traceback(),
             )
+
+
+def _unique_item_group_name(node_name: str, oid: str, current_name: str = None) -> str:
+    """
+    Cloudstore category names repeat across different branches of the tree
+    (e.g. "Jeans" under both Man and Woman are different oids). ERPNext Item
+    Group names are globally unique, so disambiguate on collision by
+    appending a short suffix derived from the category's own oid.
+    `current_name`, if given, is excluded from the collision check since a
+    doc keeping its own existing name is never a real collision.
+    """
+    if node_name == current_name or not frappe.db.exists("Item Group", node_name):
+        return node_name
+    suffix = 1
+    candidate = f"{node_name} ({oid[-6:]})"
+    while candidate != current_name and frappe.db.exists("Item Group", candidate):
+        suffix += 1
+        candidate = f"{node_name} ({oid[-6:]}-{suffix})"
+    return candidate
 
 
 def _append_log(log, message: str):

@@ -42,6 +42,7 @@ def run(trigger: str = "scheduled") -> str:
         client = CloudstoreClient()
 
         _ensure_item_attributes()
+        attr_cache = {}  # Item Attribute name -> set of already-registered values, this run
 
         stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0}
         stock_batch = []  # collect (item_code, qty) tuples across all pages
@@ -54,7 +55,7 @@ def run(trigger: str = "scheduled") -> str:
 
             for item_data in content:
                 try:
-                    action, stock_entry = _upsert_item(item_data, settings)
+                    action, stock_entry = _upsert_item(item_data, settings, attr_cache)
                     stats["processed"] += 1
                     if action == "created":
                         stats["created"] += 1
@@ -156,12 +157,42 @@ def _ensure_item_attributes():
     frappe.db.commit()
 
 
+def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
+    """
+    Register `value` as a valid Item Attribute Value for `attribute_name` if
+    it isn't already. ERPNext validates variant attribute values against this
+    list in a code path that `Item.flags.ignore_validate` does not bypass, so
+    values must be registered up front or every variant save fails with
+    "Attribute Value X is not valid for the selected attribute Y".
+
+    `cache` (Item Attribute name -> set of known values) is populated lazily
+    per sync run to avoid re-querying the same attribute for every item.
+    """
+    if not value:
+        return
+    known = cache.get(attribute_name)
+    if known is None:
+        known = set(frappe.get_all(
+            "Item Attribute Value",
+            filters={"parent": attribute_name},
+            pluck="attribute_value",
+        ))
+        cache[attribute_name] = known
+    if value in known:
+        return
+    attr = frappe.get_doc("Item Attribute", attribute_name)
+    attr.append("item_attribute_values", {"attribute_value": value, "abbr": value})
+    attr.flags.ignore_validate = True
+    attr.save(ignore_permissions=True)
+    known.add(value)
+
+
 # ---------------------------------------------------------------------------
 # Per-item upsert
 # ---------------------------------------------------------------------------
 
 
-def _upsert_item(item_data: dict, settings) -> tuple:
+def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     """
     Create or update an ERPNext Item template and its variant from one
     Cloudstore item payload.
@@ -282,6 +313,7 @@ def _upsert_item(item_data: dict, settings) -> tuple:
         variant.country_of_origin = country_of_origin
 
     size_val = (apparel_size or "N/A").strip().upper()
+    _ensure_attribute_value("Size", size_val, attr_cache)
 
     # Only Size is the varying dimension on variants; Color lives on the template.
     variant.set("attributes", [])

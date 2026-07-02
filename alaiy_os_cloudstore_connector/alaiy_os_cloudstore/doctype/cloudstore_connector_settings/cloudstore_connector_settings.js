@@ -1,5 +1,8 @@
 frappe.ui.form.on("Cloudstore Connector Settings", {
 	refresh(frm) {
+		frm.page.set_title(__("Cloudstore Settings"));
+		alaiy_os.connector_card.mount(frm, "cloudstore");
+
 		frm.add_custom_button(__("Test Connection"), () => {
 			frappe.call({
 				method: "alaiy_os_cloudstore_connector.api.test_connection.test_connection",
@@ -11,6 +14,20 @@ frappe.ui.form.on("Cloudstore Connector Settings", {
 						frappe.show_alert({ message: res.message || __("Connection failed"), indicator: "red" }, 7);
 					}
 				},
+			});
+		}, __("Actions"));
+
+		frm.add_custom_button(__("Sync Category Tree"), () => {
+			frappe.call({
+				method: "alaiy_os_cloudstore_connector.api.sync.trigger_categories_sync",
+				callback: () => frappe.show_alert({ message: __("Category sync queued"), indicator: "blue" }, 5),
+			});
+		}, __("Actions"));
+
+		frm.add_custom_button(__("Sync Items"), () => {
+			frappe.call({
+				method: "alaiy_os_cloudstore_connector.api.sync.trigger_items_sync",
+				callback: () => frappe.show_alert({ message: __("Item sync queued"), indicator: "blue" }, 5),
 			});
 		}, __("Actions"));
 	},

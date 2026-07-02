@@ -58,11 +58,20 @@ def _migrate_set_enabled_if_previously_setup():
 
 
 def _update_alaiy_os_sidebar():
-    """Re-run alaiy_os_core's sidebar provisioning so the Cloudstore Logs
-    link appears in the sidebar after this connector is installed/migrated."""
+    """
+    Re-run alaiy_os_core's workspace/sidebar provisioning so this connector's
+    Logs link and Connectors entry (settings button + card) appear right
+    after it registers, instead of waiting for the next full bench migrate.
+    """
     try:
-        from alaiy_os_core.setup.install import create_or_update_workspace_sidebar
+        from alaiy_os_core.setup.install import (
+            create_or_update_workspace_sidebar,
+            create_or_update_os_settings_workspace,
+            create_or_update_os_settings_workspace_sidebar,
+        )
         create_or_update_workspace_sidebar()
+        create_or_update_os_settings_workspace()
+        create_or_update_os_settings_workspace_sidebar()
         frappe.db.commit()
     except Exception:
         frappe.log_error(

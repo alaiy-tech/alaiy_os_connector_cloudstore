@@ -35,12 +35,14 @@
    "fieldname": "cs_api_url",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "API URL"
+   "label": "API URL",
+   "reqd": 1
   },
   {
    "fieldname": "cs_bearer_token",
    "fieldtype": "Password",
-   "label": "Bearer Token"
+   "label": "Bearer Token",
+   "reqd": 1
   },
   {
    "fieldname": "sb_defaults",
@@ -52,28 +54,32 @@
    "fieldname": "cs_supplier",
    "fieldtype": "Link",
    "label": "Supplier",
-   "options": "Supplier"
+   "options": "Supplier",
+   "reqd": 1
   },
   {
    "description": "Warehouse to receive Cloudstore inventory.",
    "fieldname": "cs_sync_warehouse",
    "fieldtype": "Link",
    "label": "Sync Warehouse",
-   "options": "Warehouse"
+   "options": "Warehouse",
+   "reqd": 1
   },
   {
    "description": "Price list for buy prices from Cloudstore.",
    "fieldname": "cs_buying_price_list",
    "fieldtype": "Link",
    "label": "Buying Price List",
-   "options": "Price List"
+   "options": "Price List",
+   "reqd": 1
   },
   {
    "description": "Price list for selling prices.",
    "fieldname": "cs_price_list",
    "fieldtype": "Link",
    "label": "Selling Price List",
-   "options": "Price List"
+   "options": "Price List",
+   "reqd": 1
   },
   {
    "fieldname": "sb_schedule",
@@ -85,7 +91,8 @@
    "description": "Items per page for catalog sync. Max 250.",
    "fieldname": "cs_page_size",
    "fieldtype": "Int",
-   "label": "Page Size"
+   "label": "Page Size",
+   "reqd": 1
   },
   {
    "default": "Disabled",
@@ -93,7 +100,8 @@
    "fieldname": "cs_category_sync_interval",
    "fieldtype": "Select",
    "label": "Category Sync Interval",
-   "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
+   "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+   "reqd": 1
   },
   {
    "default": "Disabled",
@@ -101,7 +109,8 @@
    "fieldname": "cs_items_sync_interval",
    "fieldtype": "Select",
    "label": "Items Sync Interval",
-   "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
+   "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+   "reqd": 1
   }
  ],
  "is_single": 1,
