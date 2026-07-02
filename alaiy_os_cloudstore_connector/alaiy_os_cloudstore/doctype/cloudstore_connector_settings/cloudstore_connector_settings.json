@@ -32,14 +32,12 @@
    "label": "API Connection"
   },
   {
-   "description": "Production: http://api.fashiondealer.net | Sandbox: https://sandbox.csplatform.io:9950",
    "fieldname": "cs_api_url",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "API URL"
   },
   {
-   "description": "Format: {shop_id}-{user_id}:{secret}",
    "fieldname": "cs_bearer_token",
    "fieldtype": "Password",
    "label": "Bearer Token"

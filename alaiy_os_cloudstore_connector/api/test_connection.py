@@ -1,6 +1,7 @@
 import frappe
 
 
+@frappe.whitelist()
 def test_connection():
     """
     Verify that the saved credentials can reach the Cloudstore API.

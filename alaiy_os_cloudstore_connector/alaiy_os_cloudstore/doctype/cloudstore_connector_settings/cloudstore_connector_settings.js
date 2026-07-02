@@ -6,9 +6,9 @@ frappe.ui.form.on("Cloudstore Connector Settings", {
 				callback(r) {
 					const res = r.message || {};
 					if (res.success) {
-						frappe.msgprint({ title: __("Connected"), indicator: "green", message: res.message });
+						frappe.show_alert({ message: res.message || __("Connected successfully"), indicator: "green" }, 5);
 					} else {
-						frappe.msgprint({ title: __("Connection Failed"), indicator: "red", message: res.message });
+						frappe.show_alert({ message: res.message || __("Connection failed"), indicator: "red" }, 7);
 					}
 				},
 			});
