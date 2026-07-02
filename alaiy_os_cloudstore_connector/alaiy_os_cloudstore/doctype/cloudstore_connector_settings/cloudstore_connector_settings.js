@@ -2,6 +2,7 @@ frappe.ui.form.on("Cloudstore Connector Settings", {
 	refresh(frm) {
 		frm.page.set_title(__("Cloudstore Settings"));
 		alaiy_os.connector_card.mount(frm, "cloudstore");
+		alaiy_os.connector_card.setup_password_reveal(frm, "cs_bearer_token", "cloudstore");
 
 		frm.add_custom_button(__("Test Connection"), () => {
 			frappe.call({
