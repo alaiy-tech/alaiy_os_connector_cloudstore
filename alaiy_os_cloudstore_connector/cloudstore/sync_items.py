@@ -186,6 +186,15 @@ def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
     attr.save(ignore_permissions=True)
     known.add(value)
 
+    # erpnext.controllers.item_variant.get_attribute_values() caches its
+    # result in frappe.flags.attribute_values for the rest of this process
+    # and never re-fetches it — without this, every value registered after
+    # the first cache fill stays invisible to validation for the whole sync
+    # run, even though it's already committed to the DB.
+    cached = getattr(frappe.flags, "attribute_values", None)
+    if cached is not None:
+        cached.setdefault(attribute_name.lower(), []).append(value)
+
 
 # ---------------------------------------------------------------------------
 # Per-item upsert
