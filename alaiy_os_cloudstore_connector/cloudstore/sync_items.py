@@ -185,25 +185,43 @@ def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
     after the first cache fill would still fail validation despite already
     being committed to the DB.
 
-    `cache` (Item Attribute name -> set of known values) is populated lazily
-    per sync run to avoid re-querying the same attribute for every item.
+    The abbreviation must also be unique (case-insensitively) across the
+    whole attribute, independent of the value itself — e.g. pre-existing
+    seed data has "Large" abbreviated "L", so a Cloudstore size that's
+    literally the string "L" collides on abbr even though the value itself
+    is new. Disambiguate the abbr on collision rather than the value.
+
+    `cache` (Item Attribute name -> {"values": set, "abbrs": set}) is
+    populated lazily per sync run to avoid re-querying for every item.
     """
     if not value:
         return
-    known = cache.get(attribute_name)
-    if known is None:
-        known = set(frappe.get_all(
+    state = cache.get(attribute_name)
+    if state is None:
+        rows = frappe.get_all(
             "Item Attribute Value",
             filters={"parent": attribute_name},
-            pluck="attribute_value",
-        ))
-        cache[attribute_name] = known
-    if value in known:
+            fields=["attribute_value", "abbr"],
+        )
+        state = {
+            "values": {r.attribute_value for r in rows},
+            "abbrs": {(r.abbr or "").lower() for r in rows},
+        }
+        cache[attribute_name] = state
+    if value in state["values"]:
         return
+
+    abbr = value
+    suffix = 2
+    while abbr.lower() in state["abbrs"]:
+        abbr = f"{value}-{suffix}"
+        suffix += 1
+
     attr = frappe.get_doc("Item Attribute", attribute_name)
-    attr.append("item_attribute_values", {"attribute_value": value, "abbr": value})
+    attr.append("item_attribute_values", {"attribute_value": value, "abbr": abbr})
     attr.save(ignore_permissions=True)
-    known.add(value)
+    state["values"].add(value)
+    state["abbrs"].add(abbr.lower())
 
 
 # ---------------------------------------------------------------------------
