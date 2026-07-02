@@ -255,10 +255,12 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     apparel_size = (props.get("apparel_size") or props.get("size") or "").strip()
     mnf_color = (props.get("mnf_color") or "").strip()
     hs_code = (props.get("hs_code") or "").strip()
+    mnf_barcode = (props.get("mnf_barcode") or "").strip()
     made_in_code = (props.get("made_in_code") or "").strip()
     country_of_origin = _iso_to_country_name(made_in_code)
     sale_price = item_data.get("sale_price") or 0.0
-    buy_price = props.get("buy_price") or 0.0
+    # Buying cost comes from the top-level "stock_price" field, not props.buy_price.
+    buy_price = item_data.get("stock_price") or 0.0
     qty = float(item_data.get("qty") or 0)
 
     # Template groups all variants sharing the same sku_parent + color colorway
@@ -300,7 +302,7 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     if mnf_color:
         template.manufacturer_color = mnf_color
     if hs_code:
-        template.hs_code = hs_code
+        template.customs_tariff_number = _ensure_customs_tariff_number(hs_code)
     if country_of_origin:
         template.country_of_origin = country_of_origin
 
@@ -354,7 +356,7 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     if mnf_color:
         variant.manufacturer_color = mnf_color
     if hs_code:
-        variant.hs_code = hs_code
+        variant.customs_tariff_number = _ensure_customs_tariff_number(hs_code)
     if country_of_origin:
         variant.country_of_origin = country_of_origin
 
@@ -368,6 +370,9 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     existing_uoms = [row.uom for row in (variant.uoms or [])]
     if variant.stock_uom not in existing_uoms:
         variant.append("uoms", {"uom": variant.stock_uom, "conversion_factor": 1.0})
+
+    if mnf_barcode:
+        _ensure_barcode(variant, mnf_barcode)
 
     variant.flags.ignore_validate = True
     if variant_is_new:
@@ -588,6 +593,37 @@ def _ensure_template_attribute(template, attribute_name: str):
         template.append("attributes", {"attribute": attribute_name})
 
 
+def _ensure_customs_tariff_number(hs_code: str) -> str:
+    """
+    Item.customs_tariff_number is a Link to Customs Tariff Number (autonamed
+    from its own tariff_number field), not a plain text field — create the
+    record if this HS code hasn't been seen before, then return its name to
+    link against.
+    """
+    if not frappe.db.exists("Customs Tariff Number", hs_code):
+        frappe.get_doc({
+            "doctype": "Customs Tariff Number",
+            "tariff_number": hs_code,
+        }).insert(ignore_permissions=True)
+    return hs_code
+
+
+def _ensure_barcode(variant, barcode: str):
+    """
+    Add `barcode` to the variant's Barcodes table if not already there.
+    Item Barcode's own `barcode` field is globally unique, so a value
+    already claimed by a *different* item is skipped rather than raising —
+    a data quality issue upstream shouldn't fail the whole item sync.
+    """
+    existing = [row.barcode for row in (variant.barcodes or [])]
+    if barcode in existing:
+        return
+    owner = frappe.db.get_value("Item Barcode", {"barcode": barcode}, "parent")
+    if owner and owner != variant.item_code:
+        return
+    variant.append("barcodes", {"barcode": barcode})
+
+
 def _upsert_slideshow(item_code: str, primary_url: str, extra_urls: list):
     """
     Create or update a Website Slideshow linked to the Item template.
@@ -616,36 +652,17 @@ def _upsert_slideshow(item_code: str, primary_url: str, extra_urls: list):
     frappe.db.set_value("Item", item_code, "slideshow", slideshow_name)
 
 
-_ISO2_TO_COUNTRY = {
-    "AF": "Afghanistan", "AL": "Albania", "DZ": "Algeria", "AR": "Argentina",
-    "AU": "Australia", "AT": "Austria", "AZ": "Azerbaijan", "BE": "Belgium",
-    "BD": "Bangladesh", "BR": "Brazil", "BG": "Bulgaria", "KH": "Cambodia",
-    "CA": "Canada", "CL": "Chile", "CN": "China", "CO": "Colombia",
-    "HR": "Croatia", "CZ": "Czech Republic", "DK": "Denmark", "EG": "Egypt",
-    "EE": "Estonia", "ET": "Ethiopia", "FI": "Finland", "FR": "France",
-    "GE": "Georgia", "DE": "Germany", "GH": "Ghana", "GR": "Greece",
-    "HK": "Hong Kong", "HU": "Hungary", "IN": "India", "ID": "Indonesia",
-    "IR": "Iran", "IQ": "Iraq", "IE": "Ireland", "IL": "Israel",
-    "IT": "Italy", "JP": "Japan", "JO": "Jordan", "KZ": "Kazakhstan",
-    "KE": "Kenya", "KR": "South Korea", "KW": "Kuwait", "LV": "Latvia",
-    "LB": "Lebanon", "LT": "Lithuania", "MY": "Malaysia", "MX": "Mexico",
-    "MA": "Morocco", "NL": "Netherlands", "NZ": "New Zealand", "NG": "Nigeria",
-    "NO": "Norway", "PK": "Pakistan", "PE": "Peru", "PH": "Philippines",
-    "PL": "Poland", "PT": "Portugal", "QA": "Qatar", "RO": "Romania",
-    "RU": "Russia", "SA": "Saudi Arabia", "SG": "Singapore", "SK": "Slovakia",
-    "ZA": "South Africa", "ES": "Spain", "LK": "Sri Lanka", "SE": "Sweden",
-    "CH": "Switzerland", "TW": "Taiwan", "TH": "Thailand", "TN": "Tunisia",
-    "TR": "Turkey", "UA": "Ukraine", "AE": "United Arab Emirates",
-    "GB": "United Kingdom", "US": "United States", "UY": "Uruguay",
-    "UZ": "Uzbekistan", "VN": "Vietnam", "YE": "Yemen",
-}
-
-
 def _iso_to_country_name(code: str) -> str:
-    """Map a 2-letter ISO country code to an ERPNext Country name. Returns '' if unknown."""
+    """
+    Map a 2-letter ISO country code to an ERPNext Country name via the
+    Country doctype's own `code` field, rather than a hand-maintained name
+    table — ERPNext's own country names drift from common usage (e.g.
+    "Türkiye", not "Turkey") and a hardcoded list silently goes stale.
+    Returns '' if unknown.
+    """
     if not code:
         return ""
-    return _ISO2_TO_COUNTRY.get(code.upper().strip(), "")
+    return frappe.db.get_value("Country", {"code": code.lower().strip()}, "name") or ""
 
 
 def _append_log(log, message: str):
