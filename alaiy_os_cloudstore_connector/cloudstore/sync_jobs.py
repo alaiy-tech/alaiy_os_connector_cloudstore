@@ -29,6 +29,9 @@ def check_and_enqueue():
 
     settings = frappe.get_single("Cloudstore Connector Settings")
 
+    if not settings.is_enabled:
+        return
+
     _maybe_enqueue(
         interval_setting=settings.cs_category_sync_interval,
         sync_type="categories",

@@ -16,6 +16,8 @@ connector_meta = {
     "sync_categories_method": "alaiy_os_cloudstore_connector.api.sync.trigger_categories_sync",
     "sync_items_method": "alaiy_os_cloudstore_connector.api.sync.trigger_items_sync",
     "sync_status_method": "alaiy_os_cloudstore_connector.api.sync.get_sync_status",
+    "sync_categories_label": "Category Tree",
+    "sync_items_label": "Items",
     "is_enabled": 0,
     "connection_status": "untested",
 }

@@ -5,17 +5,32 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "is_enabled",
+  "sb_connection",
   "cs_api_url",
   "cs_bearer_token",
+  "sb_defaults",
   "cs_supplier",
   "cs_sync_warehouse",
   "cs_buying_price_list",
   "cs_price_list",
+  "sb_schedule",
   "cs_page_size",
   "cs_category_sync_interval",
   "cs_items_sync_interval"
  ],
  "fields": [
+  {
+   "default": "0",
+   "fieldname": "is_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Cloudstore"
+  },
+  {
+   "fieldname": "sb_connection",
+   "fieldtype": "Section Break",
+   "label": "API Connection"
+  },
   {
    "description": "Production: http://api.fashiondealer.net | Sandbox: https://sandbox.csplatform.io:9950",
    "fieldname": "cs_api_url",
@@ -28,6 +43,11 @@
    "fieldname": "cs_bearer_token",
    "fieldtype": "Password",
    "label": "Bearer Token"
+  },
+  {
+   "fieldname": "sb_defaults",
+   "fieldtype": "Section Break",
+   "label": "Sync Defaults"
   },
   {
    "description": "Supplier to link synced items to.",
@@ -58,6 +78,11 @@
    "options": "Price List"
   },
   {
+   "fieldname": "sb_schedule",
+   "fieldtype": "Section Break",
+   "label": "Sync Schedule"
+  },
+  {
    "default": "250",
    "description": "Items per page for catalog sync. Max 250.",
    "fieldname": "cs_page_size",
@@ -83,7 +108,7 @@
  ],
  "is_single": 1,
  "links": [],
- "modified": "2026-06-23 00:00:00.000000",
+ "modified": "2026-07-02 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Alaiy OS Cloudstore",
  "name": "Cloudstore Connector Settings",

@@ -5,12 +5,14 @@ def sync_connector_registry():
     """
     Register or update this connector's row in alaiy_os_core's OS Connector Registry.
     Called from hooks.py -> after_migrate on every bench migrate.
+
+    Setup (custom fields, supplier, price lists) is NOT run here anymore.
+    It runs once when the connector is first enabled via the settings form.
+    Exception: existing installations are detected and auto-marked as enabled
+    so their syncs continue uninterrupted after upgrade.
     """
     _fix_settings_as_single()
-    setup_custom_fields()
-    setup_item_attributes()
-    create_default_supplier()
-    create_default_price_lists()
+    _migrate_set_enabled_if_previously_setup()
 
     if not frappe.db.exists("DocType", "OS Connector Registry"):
         return
@@ -40,6 +42,21 @@ def sync_connector_registry():
     _update_alaiy_os_sidebar()
 
 
+def _migrate_set_enabled_if_previously_setup():
+    """
+    Backward compat: if the custom fields were already deployed by a prior install,
+    mark is_enabled=1 in settings so scheduled syncs keep running after upgrade.
+    """
+    already_enabled = frappe.db.get_single_value(
+        "Cloudstore Connector Settings", "is_enabled"
+    )
+    if already_enabled:
+        return
+    if frappe.db.exists("Custom Field", "Item-supplier_id"):
+        frappe.db.set_single_value("Cloudstore Connector Settings", "is_enabled", 1)
+        frappe.db.commit()
+
+
 def _update_alaiy_os_sidebar():
     """Re-run alaiy_os_core's sidebar provisioning so the Cloudstore Logs
     link appears in the sidebar after this connector is installed/migrated."""
@@ -55,50 +72,50 @@ def _update_alaiy_os_sidebar():
 
 
 def setup_custom_fields():
-    """Add cs_ custom fields to Item Group and Item."""
+    """Add custom fields to Item Group and Item. Called on first enable."""
     item_group_fields = [
         {
-            "fieldname": "cs_cloudstore_id",
-            "label": "Cloudstore Category ID",
+            "fieldname": "supplier_id",
+            "label": "Supplier ID",
             "fieldtype": "Data",
             "search_index": 1,
             "insert_after": "is_group",
         },
         {
-            "fieldname": "cs_cat_level",
-            "label": "Category Level",
+            "fieldname": "supplier_cat_level",
+            "label": "Supplier Category Level",
             "fieldtype": "Int",
-            "insert_after": "cs_cloudstore_id",
+            "insert_after": "supplier_id",
         },
     ]
 
     item_fields = [
         {
-            "fieldname": "cs_cloudstore_id",
-            "label": "Cloudstore Item ID",
+            "fieldname": "supplier_id",
+            "label": "Supplier ID",
             "fieldtype": "Data",
             "search_index": 1,
             "insert_after": "item_code",
         },
         {
-            "fieldname": "cs_sku_parent",
+            "fieldname": "sku_parent",
             "label": "SKU Parent",
             "fieldtype": "Data",
             "search_index": 1,
-            "insert_after": "cs_cloudstore_id",
+            "insert_after": "supplier_id",
         },
         {
-            "fieldname": "cs_mnf_color_code",
+            "fieldname": "mnf_color_code",
             "label": "Manufacturer Color Code",
             "fieldtype": "Data",
-            "insert_after": "cs_sku_parent",
+            "insert_after": "sku_parent",
         },
         {
-            "fieldname": "cs_last_synced_at",
-            "label": "Last Synced from Cloudstore",
+            "fieldname": "last_synced_at",
+            "label": "Last Synced from Supplier",
             "fieldtype": "Datetime",
             "read_only": 1,
-            "insert_after": "cs_mnf_color_code",
+            "insert_after": "mnf_color_code",
         },
     ]
 
