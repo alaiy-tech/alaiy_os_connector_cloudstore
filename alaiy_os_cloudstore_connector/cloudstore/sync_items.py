@@ -184,7 +184,11 @@ def _upsert_item(item_data: dict, settings) -> tuple:
     description = _pick_locale(singles.get("desc"), fallback="")
 
     brand = (props.get("brand") or "").strip()
-    apparel_size = (props.get("apparel_size") or "").strip()
+    apparel_size = (props.get("apparel_size") or props.get("size") or "").strip()
+    mnf_color = (props.get("mnf_color") or "").strip()
+    hs_code = (props.get("hs_code") or "").strip()
+    made_in_code = (props.get("made_in_code") or "").strip()
+    country_of_origin = _iso_to_country_name(made_in_code)
     sale_price = item_data.get("sale_price") or 0.0
     buy_price = props.get("buy_price") or 0.0
     qty = float(item_data.get("qty") or 0)
@@ -193,11 +197,9 @@ def _upsert_item(item_data: dict, settings) -> tuple:
     mnf_color_code = (props.get("mnf_color_code") or "DEFAULT").strip()
     template_code = f"{sku_parent}__{mnf_color_code}"
 
-    imgs = item_data.get("imgs") or []
-    image_url = ""
-    if imgs:
-        first = sorted(imgs, key=lambda x: x.get("pos", 99))[0]
-        image_url = first.get("url") or ""
+    imgs = sorted(item_data.get("imgs") or [], key=lambda x: x.get("pos", 99))
+    image_url = imgs[0].get("url", "") if imgs else ""
+    extra_image_urls = [i.get("url") for i in imgs[1:] if i.get("url")]
 
     cats = item_data.get("cats") or []
     item_group = _resolve_item_group(cats)
@@ -225,8 +227,14 @@ def _upsert_item(item_data: dict, settings) -> tuple:
         _ensure_brand(brand)
     if image_url:
         template.image = image_url
-    template.cs_sku_parent = sku_parent
-    template.cs_mnf_color_code = mnf_color_code
+    template.sku_parent = sku_parent
+    template.mnf_color_code = mnf_color_code
+    if mnf_color:
+        template.manufacturer_color = mnf_color
+    if hs_code:
+        template.hs_code = hs_code
+    if country_of_origin:
+        template.country_of_origin = country_of_origin
 
     # Template declares both Size and Color as the variant dimensions.
     # Color is fixed per template (one template = one colorway); Size varies.
@@ -263,9 +271,15 @@ def _upsert_item(item_data: dict, settings) -> tuple:
         variant.brand = brand
     if image_url:
         variant.image = image_url
-    variant.cs_cloudstore_id = item_id_oid
-    variant.cs_sku_parent = sku_parent
-    variant.cs_last_synced_at = now_datetime()
+    variant.supplier_id = item_id_oid
+    variant.sku_parent = sku_parent
+    variant.last_synced_at = now_datetime()
+    if mnf_color:
+        variant.manufacturer_color = mnf_color
+    if hs_code:
+        variant.hs_code = hs_code
+    if country_of_origin:
+        variant.country_of_origin = country_of_origin
 
     size_val = (apparel_size or "N/A").strip().upper()
 
@@ -317,6 +331,10 @@ def _upsert_item(item_data: dict, settings) -> tuple:
             "desc_en":        _pick_locale(singles.get("desc")),
         }
         _upsert_supplier_attributes(template_code, supplier, attrs)
+
+    # Slideshow for additional images (linked to template)
+    if extra_image_urls:
+        _upsert_slideshow(template_code, image_url, extra_image_urls)
 
     # Stock entry returned to caller for batched reconciliation
     stock_entry = {"item_code": sku, "qty": qty} if sku else None
@@ -476,7 +494,7 @@ def _resolve_item_group(cats: list) -> str:
         return ""
     name = frappe.db.get_value(
         "Item Group",
-        {"cs_cloudstore_id": first_oid},
+        {"supplier_id": first_oid},
         "name",
     )
     return name or ""
@@ -490,6 +508,66 @@ def _ensure_template_attribute(template, attribute_name: str):
     existing = [row.attribute for row in (template.attributes or [])]
     if attribute_name not in existing:
         template.append("attributes", {"attribute": attribute_name})
+
+
+def _upsert_slideshow(item_code: str, primary_url: str, extra_urls: list):
+    """
+    Create or update a Website Slideshow linked to the Item template.
+    All images (primary + extra) go in as Slideshow Items ordered by position.
+    """
+    slideshow_name = f"CS-{item_code}"[:140]
+    all_urls = ([primary_url] if primary_url else []) + extra_urls
+
+    if frappe.db.exists("Website Slideshow", slideshow_name):
+        ss = frappe.get_doc("Website Slideshow", slideshow_name)
+        ss.set("slideshow_items", [])
+    else:
+        ss = frappe.new_doc("Website Slideshow")
+        ss.slideshow_name = slideshow_name
+
+    for idx, url in enumerate(all_urls, start=1):
+        ss.append("slideshow_items", {"image": url, "heading": "", "idx": idx})
+
+    ss.flags.ignore_validate = True
+    if ss.is_new():
+        ss.insert(ignore_permissions=True)
+    else:
+        ss.save(ignore_permissions=True)
+
+    # Link slideshow to the template item
+    frappe.db.set_value("Item", item_code, "slideshow", slideshow_name)
+
+
+_ISO2_TO_COUNTRY = {
+    "AF": "Afghanistan", "AL": "Albania", "DZ": "Algeria", "AR": "Argentina",
+    "AU": "Australia", "AT": "Austria", "AZ": "Azerbaijan", "BE": "Belgium",
+    "BD": "Bangladesh", "BR": "Brazil", "BG": "Bulgaria", "KH": "Cambodia",
+    "CA": "Canada", "CL": "Chile", "CN": "China", "CO": "Colombia",
+    "HR": "Croatia", "CZ": "Czech Republic", "DK": "Denmark", "EG": "Egypt",
+    "EE": "Estonia", "ET": "Ethiopia", "FI": "Finland", "FR": "France",
+    "GE": "Georgia", "DE": "Germany", "GH": "Ghana", "GR": "Greece",
+    "HK": "Hong Kong", "HU": "Hungary", "IN": "India", "ID": "Indonesia",
+    "IR": "Iran", "IQ": "Iraq", "IE": "Ireland", "IL": "Israel",
+    "IT": "Italy", "JP": "Japan", "JO": "Jordan", "KZ": "Kazakhstan",
+    "KE": "Kenya", "KR": "South Korea", "KW": "Kuwait", "LV": "Latvia",
+    "LB": "Lebanon", "LT": "Lithuania", "MY": "Malaysia", "MX": "Mexico",
+    "MA": "Morocco", "NL": "Netherlands", "NZ": "New Zealand", "NG": "Nigeria",
+    "NO": "Norway", "PK": "Pakistan", "PE": "Peru", "PH": "Philippines",
+    "PL": "Poland", "PT": "Portugal", "QA": "Qatar", "RO": "Romania",
+    "RU": "Russia", "SA": "Saudi Arabia", "SG": "Singapore", "SK": "Slovakia",
+    "ZA": "South Africa", "ES": "Spain", "LK": "Sri Lanka", "SE": "Sweden",
+    "CH": "Switzerland", "TW": "Taiwan", "TH": "Thailand", "TN": "Tunisia",
+    "TR": "Turkey", "UA": "Ukraine", "AE": "United Arab Emirates",
+    "GB": "United Kingdom", "US": "United States", "UY": "Uruguay",
+    "UZ": "Uzbekistan", "VN": "Vietnam", "YE": "Yemen",
+}
+
+
+def _iso_to_country_name(code: str) -> str:
+    """Map a 2-letter ISO country code to an ERPNext Country name. Returns '' if unknown."""
+    if not code:
+        return ""
+    return _ISO2_TO_COUNTRY.get(code.upper().strip(), "")
 
 
 def _append_log(log, message: str):

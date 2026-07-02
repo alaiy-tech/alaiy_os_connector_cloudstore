@@ -117,6 +117,18 @@ def setup_custom_fields():
             "read_only": 1,
             "insert_after": "mnf_color_code",
         },
+        {
+            "fieldname": "manufacturer_color",
+            "label": "Manufacturer Color",
+            "fieldtype": "Data",
+            "insert_after": "last_synced_at",
+        },
+        {
+            "fieldname": "hs_code",
+            "label": "HS Code",
+            "fieldtype": "Data",
+            "insert_after": "manufacturer_color",
+        },
     ]
 
     _ensure_custom_fields("Item Group", item_group_fields)
