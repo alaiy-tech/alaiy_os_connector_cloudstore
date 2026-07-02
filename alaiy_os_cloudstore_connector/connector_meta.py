@@ -8,7 +8,7 @@ connector_meta = {
     "connector_name": "Cloudstore",
     "connector_app": "alaiy_os_cloudstore_connector",
     "connector_type": "supplier",
-    "description": "The Corner, Italy — supplier catalogue, orders & shipping",
+    "description": "Cloudstore — supplier catalogue, orders & shipping",
     "icon": "store",
     "icon_url": "/assets/alaiy_os_cloudstore_connector/images/cloudstore-icon.svg",
     "settings_doctype": "Cloudstore Connector Settings",
