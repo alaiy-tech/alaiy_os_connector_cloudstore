@@ -294,6 +294,15 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     # Bypass ERPNext's attribute-value pre-defined list check — we manage
     # data from an external source.
     template.flags.ignore_validate = True
+    # Item.on_update() (not gated by ignore_validate, which only skips
+    # validate()) calls update_variants(), which re-saves every existing
+    # variant of this template WITHOUT ignore_validate, using whatever data
+    # each variant currently holds in the DB. Since this sync updates each
+    # variant's own attributes directly and doesn't want ERPNext's
+    # template-to-variant attribute copy, skip it entirely — without this,
+    # saving a template mid-run could re-trigger full validation against a
+    # sibling variant this run hasn't reached yet.
+    template.flags.dont_update_variants = True
     if template_is_new:
         template.insert(ignore_permissions=True)
     else:
