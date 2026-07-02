@@ -121,7 +121,7 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
         try:
             existing_name = frappe.db.get_value(
                 "Item Group",
-                {"cs_cloudstore_id": oid},
+                {"supplier_id": oid},
                 "name",
             )
             # Fall back to name match so we adopt existing groups instead of
@@ -133,8 +133,8 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
                 doc = frappe.get_doc("Item Group", existing_name)
                 doc.item_group_name = node_name
                 doc.parent_item_group = parent_name
-                doc.cs_cloudstore_id = oid
-                doc.cs_cat_level = level
+                doc.supplier_id = oid
+                doc.supplier_cat_level = level
                 doc.is_group = 1 if children else 0
                 doc.save(ignore_permissions=True)
                 stats["updated"] += 1
@@ -142,8 +142,8 @@ def _sync_tree(nodes: list, parent_name: str, log, stats: dict = None):
                 doc = frappe.new_doc("Item Group")
                 doc.item_group_name = node_name
                 doc.parent_item_group = parent_name
-                doc.cs_cloudstore_id = oid
-                doc.cs_cat_level = level
+                doc.supplier_id = oid
+                doc.supplier_cat_level = level
                 doc.is_group = 1 if children else 0
                 doc.insert(ignore_permissions=True)
                 existing_name = doc.name
