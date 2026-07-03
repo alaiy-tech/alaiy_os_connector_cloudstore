@@ -44,8 +44,13 @@ def run(trigger: str = "scheduled") -> str:
         _ensure_item_attributes()
         attr_cache = {}  # Item Attribute name -> set of already-registered values, this run
 
+        default_warehouse = _ensure_warehouse((settings.cs_sync_warehouse or "").strip())
+        # Cloudstore warehouse ID (whs[].wh_id) -> ERPNext Warehouse name, seeded
+        # from the settings' own mapping table and extended as new IDs are seen.
+        wh_cache = {row.cs_wh_id: row.warehouse for row in (settings.cs_warehouse_mapping or [])}
+
         stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0}
-        stock_batch = []  # collect (item_code, qty) tuples across all pages
+        stock_batch = []  # collect {"item_code", "warehouse", "qty"} dicts across all pages
 
         for content, metadata in client.get_paginated(
             "/items", params={"withQuantities": "true"}
@@ -55,14 +60,16 @@ def run(trigger: str = "scheduled") -> str:
 
             for item_data in content:
                 try:
-                    action, stock_entry = _upsert_item(item_data, settings, attr_cache)
+                    action, stock_entries = _upsert_item(
+                        item_data, settings, attr_cache, wh_cache, default_warehouse
+                    )
                     stats["processed"] += 1
                     if action == "created":
                         stats["created"] += 1
                     else:
                         stats["updated"] += 1
-                    if stock_entry:
-                        stock_batch.append(stock_entry)
+                    if stock_entries:
+                        stock_batch.extend(stock_entries)
                 except Exception as exc:
                     sku = item_data.get("sku", "unknown")
                     stats["failed"] += 1
@@ -81,11 +88,10 @@ def run(trigger: str = "scheduled") -> str:
             frappe.db.commit()
 
         # One Stock Reconciliation for all synced variants — far cheaper than
-        # one per variant.
-        warehouse = _ensure_warehouse((settings.cs_sync_warehouse or "").strip())
-        if stock_batch and warehouse:
+        # one per variant. Each entry already carries its own resolved warehouse.
+        if stock_batch:
             try:
-                _submit_stock_reconciliation(stock_batch, warehouse)
+                _submit_stock_reconciliation(stock_batch)
             except Exception as exc:
                 _append_log(log, f"WARNING: Stock Reconciliation failed: {exc}")
                 frappe.log_error(
@@ -229,7 +235,7 @@ def _ensure_attribute_value(attribute_name: str, value: str, cache: dict):
 # ---------------------------------------------------------------------------
 
 
-def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
+def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, default_warehouse: str) -> tuple:
     """
     Create or update an ERPNext Item template and its variant from one
     Cloudstore item payload.
@@ -238,7 +244,7 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     Variant  item_code = sku (the full SKU from Cloudstore)
 
     Returns:
-        ("created" | "updated", {"item_code": str, "qty": float} | None)
+        ("created" | "updated", [{"item_code": str, "warehouse": str, "qty": float}, ...])
     """
     sku = (item_data.get("sku") or "").strip()
     props = item_data.get("props") or {}
@@ -261,7 +267,6 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     sale_price = item_data.get("sale_price") or 0.0
     # Buying cost comes from the top-level "stock_price" field, not props.buy_price.
     buy_price = item_data.get("stock_price") or 0.0
-    qty = float(item_data.get("qty") or 0)
 
     # Template groups all variants sharing the same sku_parent + color colorway
     mnf_color_code = (props.get("mnf_color_code") or "DEFAULT").strip()
@@ -419,10 +424,14 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict) -> tuple:
     if extra_image_urls:
         _upsert_slideshow(template_code, image_url, extra_image_urls)
 
-    # Stock entry returned to caller for batched reconciliation
-    stock_entry = {"item_code": sku, "qty": qty} if sku else None
+    # Stock entries returned to caller for batched reconciliation — one per
+    # Cloudstore warehouse row, each resolved to its mapped ERPNext Warehouse.
+    stock_entries = (
+        _build_stock_entries(sku, item_data, settings, wh_cache, default_warehouse)
+        if sku else []
+    )
 
-    return ("created" if variant_is_new else "updated"), stock_entry
+    return ("created" if variant_is_new else "updated"), stock_entries
 
 
 # ---------------------------------------------------------------------------
@@ -516,9 +525,58 @@ def _ensure_warehouse(warehouse_name: str) -> str:
     return wh.name
 
 
-def _submit_stock_reconciliation(entries: list, warehouse: str):
-    """Submit one Stock Reconciliation covering all synced variants."""
-    if not entries or not warehouse:
+def _resolve_warehouse_for_wh_id(wh_id: str, settings, cache: dict, default_warehouse: str) -> str:
+    """
+    Map a Cloudstore warehouse ID (whs[].wh_id) to its ERPNext Warehouse via
+    the connector's own Warehouse Mapping table. The first time a given
+    wh_id is seen, it's auto-added to that table pointed at the default
+    warehouse, so it becomes visible in Settings for re-pointing later
+    instead of silently pooling into the default forever.
+    """
+    if not wh_id:
+        return default_warehouse
+    if wh_id in cache:
+        return _ensure_warehouse(cache[wh_id]) or default_warehouse
+
+    settings.append("cs_warehouse_mapping", {"cs_wh_id": wh_id, "warehouse": default_warehouse})
+    settings.save(ignore_permissions=True)
+    frappe.db.commit()
+    cache[wh_id] = default_warehouse
+    return default_warehouse
+
+
+def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, default_warehouse: str) -> list:
+    """
+    One stock entry per Cloudstore warehouse row (whs[]), each resolved to
+    its mapped ERPNext Warehouse. Falls back to a single entry against the
+    default warehouse using the item's top-level qty if Cloudstore didn't
+    report a whs[] breakdown for this item.
+    """
+    whs = item_data.get("whs") or []
+    if not whs:
+        return [{
+            "item_code": sku,
+            "warehouse": default_warehouse,
+            "qty": float(item_data.get("qty") or 0),
+        }]
+
+    entries = []
+    for row in whs:
+        wh_id = ((row.get("wh_id") or {}).get("$oid") or "").strip()
+        warehouse = _resolve_warehouse_for_wh_id(wh_id, settings, wh_cache, default_warehouse)
+        entries.append({
+            "item_code": sku,
+            "warehouse": warehouse,
+            "qty": float(row.get("qty") or 0),
+        })
+    return entries
+
+
+def _submit_stock_reconciliation(entries: list):
+    """Submit one Stock Reconciliation covering all synced variants — each
+    entry already carries its own resolved warehouse."""
+    entries = [e for e in entries if e.get("warehouse")]
+    if not entries:
         return
     company = frappe.defaults.get_global_default("company")
     expense_account = (
@@ -533,7 +591,7 @@ def _submit_stock_reconciliation(entries: list, warehouse: str):
     for entry in entries:
         recon.append("items", {
             "item_code": entry["item_code"],
-            "warehouse": warehouse,
+            "warehouse": entry["warehouse"],
             "qty":       entry["qty"],
         })
     recon.flags.ignore_permissions = True

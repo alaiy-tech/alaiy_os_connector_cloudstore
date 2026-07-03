@@ -12,6 +12,7 @@
   "sb_defaults",
   "cs_supplier",
   "cs_sync_warehouse",
+  "cs_warehouse_mapping",
   "cs_buying_price_list",
   "cs_price_list",
   "sb_schedule",
@@ -58,12 +59,19 @@
    "reqd": 1
   },
   {
-   "description": "Warehouse to receive Cloudstore inventory.",
+   "description": "Default warehouse for any Cloudstore warehouse ID not listed in the mapping below.",
    "fieldname": "cs_sync_warehouse",
    "fieldtype": "Link",
-   "label": "Sync Warehouse",
+   "label": "Default Sync Warehouse",
    "options": "Warehouse",
    "reqd": 1
+  },
+  {
+   "description": "Maps each Cloudstore warehouse ID (whs[].wh_id) to the ERPNext Warehouse it should stock into. Unmapped IDs fall back to the Default Sync Warehouse above and are auto-added here the first time they're seen, so you can re-point them later.",
+   "fieldname": "cs_warehouse_mapping",
+   "fieldtype": "Table",
+   "label": "Warehouse Mapping",
+   "options": "Cloudstore Warehouse Mapping"
   },
   {
    "description": "Price list for buy prices from Cloudstore.",
