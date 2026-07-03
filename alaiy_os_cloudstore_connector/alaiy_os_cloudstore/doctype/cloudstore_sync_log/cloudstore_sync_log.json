@@ -42,7 +42,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "running\nsuccess\nfailed",
+   "options": "running\nsuccess\nfailed\nskipped",
    "reqd": 1
   },
   {

@@ -12,6 +12,37 @@ from alaiy_os_cloudstore_connector.cloudstore.client import CloudstoreClient
 # ---------------------------------------------------------------------------
 
 
+STALE_RUNNING_THRESHOLD_MINUTES = 120
+
+
+def _has_active_items_sync() -> bool:
+    """
+    True if another items sync is genuinely still in flight. A "running" log
+    older than the stale threshold is treated as orphaned — e.g. its worker
+    was killed mid-run by a deploy/restart — and is marked failed so it stops
+    permanently blocking future runs.
+    """
+    cutoff = frappe.utils.add_to_date(now_datetime(), minutes=-STALE_RUNNING_THRESHOLD_MINUTES)
+    running = frappe.get_all(
+        "Cloudstore Sync Log",
+        filters={"sync_type": "items", "status": "running"},
+        fields=["name", "started_at"],
+    )
+    active = False
+    for row in running:
+        if row.started_at and row.started_at < cutoff:
+            frappe.db.set_value("Cloudstore Sync Log", row.name, {
+                "status": "failed",
+                "finished_at": now_datetime(),
+                "error_message": "Marked failed: orphaned running log (worker likely restarted mid-run).",
+            })
+        else:
+            active = True
+    if running:
+        frappe.db.commit()
+    return active
+
+
 def run(trigger: str = "scheduled") -> str:
     """
     Synchronise Cloudstore items (templates + variants) into ERPNext Items.
@@ -20,9 +51,26 @@ def run(trigger: str = "scheduled") -> str:
     Item Prices, links Suppliers, writes extended attributes, then submits one
     batched Stock Reconciliation covering all synced variants.
 
+    Skips entirely (logged as "skipped") if another items sync is still
+    running — a full sync can take longer than the configured schedule
+    interval, and running two at once causes DB lock contention between
+    them rather than either finishing faster.
+
     Returns:
         The name (ID) of the Cloudstore Sync Log document.
     """
+    if _has_active_items_sync():
+        log = frappe.new_doc("Cloudstore Sync Log")
+        log.sync_type = "items"
+        log.trigger = trigger
+        log.status = "skipped"
+        log.started_at = now_datetime()
+        log.finished_at = now_datetime()
+        log.error_message = "Skipped: another items sync is already running."
+        log.insert(ignore_permissions=True)
+        frappe.db.commit()
+        return log.name
+
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "items"
     log.trigger = trigger
@@ -573,30 +621,57 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
 
 
 def _submit_stock_reconciliation(entries: list):
-    """Submit one Stock Reconciliation covering all synced variants — each
-    entry already carries its own resolved warehouse."""
+    """
+    Submit one Stock Reconciliation covering all synced variants — each
+    entry already carries its own resolved warehouse.
+
+    When a warehouse/item combination has no prior Stock Ledger Entry,
+    ERPNext treats the reconciliation as an Opening Entry and requires an
+    Asset/Liability-type difference account, rejecting the normal P&L
+    Stock Adjustment account. Since we can't tell in advance which items
+    are "opening" for a brand-new warehouse, try the normal account first
+    and fall back to the company's Temporary Opening account on that
+    specific validation error.
+    """
     entries = [e for e in entries if e.get("warehouse")]
     if not entries:
         return
     company = frappe.defaults.get_global_default("company")
-    expense_account = (
+
+    def _build_recon(expense_account):
+        recon = frappe.new_doc("Stock Reconciliation")
+        recon.purpose = "Stock Reconciliation"
+        recon.company = company
+        if expense_account:
+            recon.expense_account = expense_account
+        for entry in entries:
+            recon.append("items", {
+                "item_code": entry["item_code"],
+                "warehouse": entry["warehouse"],
+                "qty":       entry["qty"],
+            })
+        recon.flags.ignore_permissions = True
+        return recon
+
+    stock_adjustment_account = (
         frappe.get_cached_value("Company", company, "stock_adjustment_account") or ""
         if company else ""
     )
-    recon = frappe.new_doc("Stock Reconciliation")
-    recon.purpose = "Stock Reconciliation"
-    recon.company = company
-    if expense_account:
-        recon.expense_account = expense_account
-    for entry in entries:
-        recon.append("items", {
-            "item_code": entry["item_code"],
-            "warehouse": entry["warehouse"],
-            "qty":       entry["qty"],
-        })
-    recon.flags.ignore_permissions = True
-    recon.insert()
-    recon.submit()
+    try:
+        recon = _build_recon(stock_adjustment_account)
+        recon.insert()
+        recon.submit()
+    except frappe.ValidationError as exc:
+        if "Opening Entry" not in str(exc):
+            raise
+        opening_account = frappe.db.get_value(
+            "Account", {"company": company, "account_type": "Temporary", "is_group": 0}, "name"
+        )
+        if not opening_account:
+            raise
+        recon = _build_recon(opening_account)
+        recon.insert()
+        recon.submit()
     frappe.db.commit()
 
 
