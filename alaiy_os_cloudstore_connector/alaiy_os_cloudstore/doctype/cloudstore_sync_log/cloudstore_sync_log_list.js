@@ -5,7 +5,7 @@ const CLOUDSTORE_SYNC_TYPE_COLORS = {
 
 const CLOUDSTORE_TRIGGER_COLORS = {
 	scheduled: "purple",
-	manual: "darkgrey",
+	manual: "pink",
 };
 
 const CLOUDSTORE_STATUS_COLORS = {
