@@ -1,6 +1,19 @@
 import frappe
 
 
+def after_install():
+    """
+    Called once after `bench install-app`. Clears any stale encrypted
+    Password fields that may have been written with a different site
+    encryption key (e.g. from a prior failed install), preventing the
+    'Failed to decrypt key' error on first load.
+    """
+    frappe.db.set_single_value(
+        "Cloudstore Connector Settings", "cs_bearer_token", ""
+    )
+    frappe.db.commit()
+
+
 def sync_connector_registry():
     """
     Register or update this connector's row in alaiy_os's OS Connector Registry.

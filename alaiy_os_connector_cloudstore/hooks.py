@@ -7,6 +7,10 @@ app_license = "MIT"
 
 required_apps = ["alaiy_os", "erpnext"]
 
+after_install = [
+    "alaiy_os_connector_cloudstore.setup.install.after_install"
+]
+
 after_migrate = [
     "alaiy_os_connector_cloudstore.setup.install.sync_connector_registry"
 ]
