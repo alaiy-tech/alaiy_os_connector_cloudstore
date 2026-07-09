@@ -4,7 +4,7 @@
 import frappe
 from frappe.utils import now_datetime
 
-from alaiy_os_cloudstore_connector.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ def run_in_background(trigger: str = "manual") -> dict:
         {"queued": True}
     """
     frappe.enqueue(
-        "alaiy_os_cloudstore_connector.cloudstore.sync_categories.run",
+        "alaiy_os_connector_cloudstore.cloudstore.sync_categories.run",
         queue="long",
         trigger=trigger,
     )

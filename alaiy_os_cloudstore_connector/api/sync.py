@@ -12,7 +12,7 @@ def trigger_categories_sync():
     Returns:
         {"queued": True}
     """
-    from alaiy_os_cloudstore_connector.cloudstore.sync_categories import run_in_background
+    from alaiy_os_connector_cloudstore.cloudstore.sync_categories import run_in_background
 
     return run_in_background(trigger="manual")
 
@@ -25,7 +25,7 @@ def trigger_items_sync():
     Returns:
         {"queued": True}
     """
-    from alaiy_os_cloudstore_connector.cloudstore.sync_items import run_in_background
+    from alaiy_os_connector_cloudstore.cloudstore.sync_items import run_in_background
 
     return run_in_background(trigger="manual")
 
