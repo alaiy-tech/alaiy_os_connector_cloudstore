@@ -1,1 +1,1 @@
-Alaiy OS Cloudstore
+Alaiy OS Connector Cloudstore

@@ -35,12 +35,12 @@ def check_and_enqueue():
     _maybe_enqueue(
         interval_setting=settings.cs_category_sync_interval,
         sync_type="categories",
-        enqueue_fn="alaiy_os_cloudstore_connector.cloudstore.sync_categories.run",
+        enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_categories.run",
     )
     _maybe_enqueue(
         interval_setting=settings.cs_items_sync_interval,
         sync_type="items",
-        enqueue_fn="alaiy_os_cloudstore_connector.cloudstore.sync_items.run",
+        enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_items.run",
     )
 
 

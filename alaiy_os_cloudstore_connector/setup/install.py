@@ -3,7 +3,7 @@ import frappe
 
 def sync_connector_registry():
     """
-    Register or update this connector's row in alaiy_os_core's OS Connector Registry.
+    Register or update this connector's row in alaiy_os's OS Connector Registry.
     Called from hooks.py -> after_migrate on every bench migrate.
 
     Setup (custom fields, supplier, price lists) is NOT run here anymore.
@@ -17,7 +17,7 @@ def sync_connector_registry():
     if not frappe.db.exists("DocType", "OS Connector Registry"):
         return
 
-    from alaiy_os_cloudstore_connector.connector_meta import connector_meta
+    from alaiy_os_connector_cloudstore.connector_meta import connector_meta
 
     connector_id = connector_meta["connector_id"]
 
@@ -53,18 +53,19 @@ def _migrate_set_enabled_if_previously_setup():
     if already_enabled:
         return
     if frappe.db.exists("Custom Field", "Item-supplier_id"):
-        frappe.db.set_single_value("Cloudstore Connector Settings", "is_enabled", 1)
+        frappe.db.set_single_value(
+            "Cloudstore Connector Settings", "is_enabled", 1)
         frappe.db.commit()
 
 
 def _update_alaiy_os_sidebar():
     """
-    Re-run alaiy_os_core's workspace/sidebar provisioning so this connector's
+    Re-run alaiy_os's workspace/sidebar provisioning so this connector's
     Logs link and Connectors entry (settings button + card) appear right
     after it registers, instead of waiting for the next full bench migrate.
     """
     try:
-        from alaiy_os_core.setup.install import (
+        from alaiy_os.setup.install import (
             create_or_update_workspace_sidebar,
             create_or_update_os_settings_workspace,
             create_or_update_os_settings_workspace_sidebar,
@@ -158,7 +159,7 @@ def _ensure_custom_fields(doctype, fields):
         cf.insert_after = f.get("insert_after", "")
         cf.search_index = 1 if f.get("search_index") else 0
         cf.read_only = 1 if f.get("read_only") else 0
-        cf.module = "Alaiy OS Cloudstore"
+        cf.module = "Alaiy OS Connector Cloudstore"
         cf.insert(ignore_permissions=True)
 
 
