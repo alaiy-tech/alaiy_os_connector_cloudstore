@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="alaiy_os_cloudstore_connector",
+    name="alaiy_os_connector_cloudstore",
     version="0.0.1",
     description="Alaiy OS — Cloudstore Connector",
     author="Alaiy",
