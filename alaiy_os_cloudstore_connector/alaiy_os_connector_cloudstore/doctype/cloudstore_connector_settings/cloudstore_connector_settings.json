@@ -1,0 +1,149 @@
+{
+  "creation": "2026-06-18 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "is_enabled",
+    "sb_connection",
+    "cs_api_url",
+    "cs_bearer_token",
+    "sb_defaults",
+    "cs_supplier",
+    "cs_sync_warehouse",
+    "cs_warehouse_mapping",
+    "cs_buying_price_list",
+    "cs_price_list",
+    "sb_schedule",
+    "cs_page_size",
+    "cs_category_sync_interval",
+    "cs_items_sync_interval"
+  ],
+  "fields": [
+    {
+      "default": "0",
+      "fieldname": "is_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Cloudstore"
+    },
+    {
+      "fieldname": "sb_connection",
+      "fieldtype": "Section Break",
+      "label": "API Connection"
+    },
+    {
+      "fieldname": "cs_api_url",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "API URL",
+      "reqd": 1
+    },
+    {
+      "fieldname": "cs_bearer_token",
+      "fieldtype": "Password",
+      "label": "Bearer Token",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sb_defaults",
+      "fieldtype": "Section Break",
+      "label": "Sync Defaults"
+    },
+    {
+      "description": "Supplier to link synced items to.",
+      "fieldname": "cs_supplier",
+      "fieldtype": "Link",
+      "label": "Supplier",
+      "options": "Supplier",
+      "reqd": 1
+    },
+    {
+      "description": "Default warehouse for any Cloudstore warehouse ID not listed in the mapping below.",
+      "fieldname": "cs_sync_warehouse",
+      "fieldtype": "Link",
+      "label": "Default Sync Warehouse",
+      "options": "Warehouse",
+      "reqd": 1
+    },
+    {
+      "description": "Maps each Cloudstore warehouse ID (whs[].wh_id) to the ERPNext Warehouse it should stock into. Unmapped IDs fall back to the Default Sync Warehouse above and are auto-added here the first time they're seen, so you can re-point them later.",
+      "fieldname": "cs_warehouse_mapping",
+      "fieldtype": "Table",
+      "label": "Warehouse Mapping",
+      "options": "Cloudstore Warehouse Mapping"
+    },
+    {
+      "description": "Price list for buy prices from Cloudstore.",
+      "fieldname": "cs_buying_price_list",
+      "fieldtype": "Link",
+      "label": "Buying Price List",
+      "options": "Price List",
+      "reqd": 1
+    },
+    {
+      "description": "Price list for selling prices.",
+      "fieldname": "cs_price_list",
+      "fieldtype": "Link",
+      "label": "Selling Price List",
+      "options": "Price List",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sb_schedule",
+      "fieldtype": "Section Break",
+      "label": "Sync Schedule"
+    },
+    {
+      "default": "250",
+      "description": "Items per page for catalog sync. Max 250.",
+      "fieldname": "cs_page_size",
+      "fieldtype": "Int",
+      "label": "Page Size",
+      "reqd": 1
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to automatically sync the category tree.",
+      "fieldname": "cs_category_sync_interval",
+      "fieldtype": "Select",
+      "label": "Category Sync Interval",
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+      "reqd": 1
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to automatically sync items.",
+      "fieldname": "cs_items_sync_interval",
+      "fieldtype": "Select",
+      "label": "Items Sync Interval",
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+      "reqd": 1
+    }
+  ],
+  "is_single": 1,
+  "links": [],
+  "modified": "2026-07-02 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Alaiy OS Connector Cloudstore",
+  "name": "Cloudstore Connector Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0
+}
