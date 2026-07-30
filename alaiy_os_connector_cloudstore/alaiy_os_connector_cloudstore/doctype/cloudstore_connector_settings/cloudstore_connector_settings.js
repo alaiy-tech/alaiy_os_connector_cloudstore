@@ -12,8 +12,13 @@ frappe.ui.form.on("Cloudstore Connector Settings", {
       __("Test Connection"),
       () => {
         frappe.call({
-          method:
-            "alaiy_os_connector_cloudstore.api.test_connection.test_connection",
+          // Goes through the registry wrapper (not test_connection directly)
+          // so a successful test also flips the "Connector Status" card at
+          // the top of this form from "Not configured" to "Connected" --
+          // calling test_connection directly ran the real check but left
+          // OS Connector Registry.connection_status untouched.
+          method: "alaiy_os.api.connectors.test_connector",
+          args: { connector_id: "cloudstore" },
           callback(r) {
             const res = r.message || {};
             if (res.success) {
