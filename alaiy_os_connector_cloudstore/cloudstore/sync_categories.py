@@ -5,6 +5,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 
 
 # ---------------------------------------------------------------------------
@@ -22,6 +23,10 @@ def run(trigger: str = "scheduled") -> str:
     Returns:
         The name (ID) of the Cloudstore Sync Log document.
     """
+    skipped = skip_if_active("categories", trigger)
+    if skipped:
+        return skipped
+
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "categories"
     log.trigger = trigger
@@ -37,7 +42,7 @@ def run(trigger: str = "scheduled") -> str:
     try:
         _ensure_root_item_group()
         client = CloudstoreClient()
-        tree = client.get("/categories/tree")
+        tree = client.categories.tree()
 
         stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0}
         _sync_tree(tree, "All Item Groups", log, stats)

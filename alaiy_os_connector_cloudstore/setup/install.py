@@ -26,6 +26,8 @@ def sync_connector_registry():
     """
     _fix_settings_as_single()
     _migrate_set_enabled_if_previously_setup()
+    if frappe.db.get_single_value("Cloudstore Connector Settings", "is_enabled"):
+        setup_order_fields()  # sites enabled before orders existed
 
     if not frappe.db.exists("DocType", "OS Connector Registry"):
         return
@@ -157,6 +159,28 @@ def setup_custom_fields():
     _ensure_custom_fields("Item Group", item_group_fields)
     _ensure_custom_fields("Item", item_fields)
     frappe.db.commit()
+    setup_order_fields()
+
+
+def setup_order_fields():
+    """Tracking fields on Sales Order for orders sent to Cloudstore."""
+    _ensure_custom_fields("Sales Order", [
+        {"fieldname": "cs_order_id", "label": "Cloudstore Order ID", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "search_index": 1, "insert_after": "po_no"},
+        {"fieldname": "cs_order_status", "label": "Cloudstore Order Status", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_order_id"},
+        {"fieldname": "cs_push_error", "label": "Cloudstore Push Error", "fieldtype": "Small Text",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_order_status"},
+        {"fieldname": "cs_carrier", "label": "Cloudstore Carrier", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_push_error"},
+        {"fieldname": "cs_tracking_number", "label": "Cloudstore Tracking Number", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_carrier"},
+        {"fieldname": "cs_tracking_url", "label": "Cloudstore Tracking URL", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_tracking_number"},
+        {"fieldname": "cs_shipment_status", "label": "Cloudstore Shipment Status", "fieldtype": "Data",
+         "read_only": 1, "allow_on_submit": 1, "insert_after": "cs_tracking_url"},
+    ])
+    frappe.db.commit()
 
 
 def _ensure_custom_fields(doctype, fields):
@@ -172,6 +196,7 @@ def _ensure_custom_fields(doctype, fields):
         cf.insert_after = f.get("insert_after", "")
         cf.search_index = 1 if f.get("search_index") else 0
         cf.read_only = 1 if f.get("read_only") else 0
+        cf.allow_on_submit = 1 if f.get("allow_on_submit") else 0
         cf.module = "Alaiy OS Connector Cloudstore"
         cf.insert(ignore_permissions=True)
 

@@ -5,7 +5,7 @@ import frappe
 def test_connection():
     """
     Verify that the saved credentials can reach the Cloudstore API.
-    Calls GET /shop/v1/categories/roots — lightweight, auth-required endpoint.
+    Calls GET /categories/tree — lightweight, auth-required endpoint.
     Returns: {"success": bool, "message": str}
     """
     doc = frappe.get_single("Cloudstore Connector Settings")

@@ -1,27 +1,41 @@
 # Alaiy OS Connector: Cloudstore
 
-Connects a Cloudstore supplier account to [Alaiy OS](https://alaiy.com),
-syncing the supplier's category tree and item catalogue.
+Connects a Cloudstore supplier account to [Alaiy OS](https://alaiy.com).
+Cloudstore is read into ERPNext: category tree, item catalogue, prices and
+stock. Sales Orders can be sent to Cloudstore, and Cloudstore events (order
+status, shipments, stock, prices) are read back.
 
 ## Features
 
-- **Category tree sync** — pulls Cloudstore's category hierarchy into
-  Alaiy OS.
-- **Item sync** — pulls the supplier's catalogue of items, kept up to date
-  on demand or on a schedule.
-- **Secure authentication** — Bearer token auth, with a live Test
-  Connection check before enabling.
-- **Sync status and logging** — every sync run is tracked, so failures are
-  visible rather than silent.
+- **Category sync**: Cloudstore categories to Item Groups.
+- **Item sync**: items as template and variant Items with prices, supplier
+  link, barcodes, images and every other field Cloudstore returns.
+- **Stock sync**: stock-only update that keeps Cloudstore quantities on the
+  Item and changes ERPNext stock only where it differs.
+- **Order push**: submitted Sales Orders (Cloudstore items only) are sent to
+  Cloudstore, cancelled there on cancel, and their status is refreshed.
+- **Events**: order status, shipment, price, stock, catalogue and removal
+  events are applied.
+- **On-demand tools**: search, lookup, single-item and filtered sync,
+  category browse.
+- **Sync log**: every run is recorded in Cloudstore Sync Log.
+
+Every scheduled job is disabled until its interval is set. Order push is off
+until **Send Sales Orders to Cloudstore** is set.
 
 ## Setup
 
-1. In Alaiy OS: open **Cloudstore Connector Settings** and fill in the
-   Cloudstore API URL and Bearer Token.
-2. Click **Test Connection** to confirm the credentials work.
-3. Enable the connector and save.
-4. Trigger a Category Tree sync, then an Items sync, from the connector's
-   dashboard.
+1. Open **Cloudstore Connector Settings**. Enter the API URL (ending in
+   `/shop/v1`) and the Bearer Token.
+2. Choose the Supplier, Default Sync Warehouse, Buying Price List and Selling
+   Price List.
+3. Click **Test Connection**.
+4. Enable the connector and save.
+5. Run **Sync Category Tree**, then **Sync Items**.
+
+## Documentation
+
+Technical docs are in [docs/](docs/index.md).
 
 ## License
 

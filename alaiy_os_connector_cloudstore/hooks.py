@@ -22,6 +22,13 @@ alaiy_os_sidebar_log_items = [
      "label": "Cloudstore Logs", "icon": "activity"}
 ]
 
+doc_events = {
+    "Sales Order": {
+        "on_submit": "alaiy_os_connector_cloudstore.cloudstore.sync_orders.on_sales_order_submit",
+        "on_cancel": "alaiy_os_connector_cloudstore.cloudstore.sync_orders.on_sales_order_cancel",
+    }
+}
+
 scheduler_events = {
     "cron": {
         "* * * * *": [
