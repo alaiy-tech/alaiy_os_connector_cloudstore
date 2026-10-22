@@ -5,6 +5,7 @@ import frappe
 from frappe.utils import add_days, now_datetime, nowdate
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 from alaiy_os_connector_cloudstore.cloudstore.order_payload import (
     build_order_payload,
     cloudstore_lines,
@@ -13,10 +14,24 @@ from alaiy_os_connector_cloudstore.cloudstore.order_payload import (
 # Orders are not tracked past this age by the status refresh.
 _REFRESH_WINDOW_DAYS = 30
 
+# A failed push is retried by the orders job only while the Sales Order is this young.
+_RETRY_WINDOW_DAYS = 2
+
+# Failure texts that are worth retrying: network trouble, rate limit, server errors.
+_TRANSIENT_MARKERS = ("Cloudstore API error 429", "Cloudstore API error 5", "Connection", "Timeout", "timed out")
+
+
+def _push_enabled() -> bool:
+    """Order push needs the connector enabled and the push switch on."""
+    return bool(
+        frappe.db.get_single_value("Cloudstore Connector Settings", "is_enabled")
+        and frappe.db.get_single_value("Cloudstore Connector Settings", "cs_push_orders")
+    )
+
 
 def on_sales_order_submit(doc, method=None):
     """doc_events hook: queue the push so the submit itself never waits on Cloudstore."""
-    if not frappe.db.get_single_value("Cloudstore Connector Settings", "cs_push_orders"):
+    if not _push_enabled():
         return
     frappe.enqueue(
         "alaiy_os_connector_cloudstore.cloudstore.sync_orders.push_order",
@@ -28,7 +43,7 @@ def on_sales_order_submit(doc, method=None):
 
 def on_sales_order_cancel(doc, method=None):
     """doc_events hook: a cancelled Sales Order that was sent is cancelled on Cloudstore too."""
-    if not frappe.db.get_single_value("Cloudstore Connector Settings", "cs_push_orders"):
+    if not _push_enabled():
         return
     if not doc.get("cs_order_id"):
         return
@@ -90,6 +105,35 @@ def push_order(sales_order: str) -> dict:
         return {"error": str(exc)}
 
 
+def retry_failed_pushes() -> dict:
+    """
+    Push again the Sales Orders whose push failed for a transient reason
+    (network error, HTTP 429 or 5xx). A rejection by Cloudstore (HTTP 4xx, for
+    example an unknown SKU) is not retried: it would fail the same way, so it
+    stays in cs_push_error for a person to fix and retry with push_sales_order.
+    """
+    stats = {"retried": 0, "sent": 0}
+    if not _push_enabled():
+        return stats
+    rows = frappe.get_all(
+        "Sales Order",
+        filters={
+            "docstatus": 1,
+            "cs_order_id": ["is", "not set"],
+            "cs_push_error": ["is", "set"],
+            "transaction_date": [">=", add_days(nowdate(), -_RETRY_WINDOW_DAYS)],
+        },
+        fields=["name", "cs_push_error"],
+    )
+    for row in rows:
+        if not any(marker in row.cs_push_error for marker in _TRANSIENT_MARKERS):
+            continue
+        stats["retried"] += 1
+        if push_order(row.name).get("cs_order_id"):
+            stats["sent"] += 1
+    return stats
+
+
 def refresh_order_statuses() -> dict:
     """Pull the current Cloudstore status for recently pushed Sales Orders."""
     names = frappe.get_all(
@@ -116,6 +160,10 @@ def refresh_order_statuses() -> dict:
 
 def run(trigger: str = "scheduled") -> str:
     """Background job: refresh statuses and record the run in Cloudstore Sync Log."""
+    skipped = skip_if_active("orders", trigger)
+    if skipped:
+        return skipped
+
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "orders"
     log.trigger = trigger
@@ -124,6 +172,9 @@ def run(trigger: str = "scheduled") -> str:
     log.insert(ignore_permissions=True)
     frappe.db.commit()
     try:
+        retries = retry_failed_pushes()
+        if retries["retried"]:
+            log.log_messages = f"Push retries: {retries['retried']} tried, {retries['sent']} sent."
         stats = refresh_order_statuses()
         log.items_processed = stats["checked"]
         log.items_updated = stats["changed"]

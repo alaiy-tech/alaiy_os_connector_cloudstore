@@ -20,6 +20,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 from alaiy_os_connector_cloudstore.cloudstore.sync_items import (
     _build_stock_entries,
     _ensure_warehouse,
@@ -31,6 +32,10 @@ _RECONCILE_CHUNK = 200
 
 def run(trigger: str = "scheduled") -> str:
     """Background job. One Cloudstore Sync Log row, sync type "stock"."""
+    skipped = skip_if_active("stock", trigger)
+    if skipped:
+        return skipped
+
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "stock"
     log.trigger = trigger

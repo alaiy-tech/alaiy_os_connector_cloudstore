@@ -5,6 +5,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 from alaiy_os_connector_cloudstore.cloudstore.item_attributes import build_supplier_attributes
 
 
@@ -13,35 +14,8 @@ from alaiy_os_connector_cloudstore.cloudstore.item_attributes import build_suppl
 # ---------------------------------------------------------------------------
 
 
-STALE_RUNNING_THRESHOLD_MINUTES = 120
-
-
-def _has_active_items_sync() -> bool:
-    """
-    True if another items sync is genuinely still in flight. A "running" log
-    older than the stale threshold is treated as orphaned — e.g. its worker
-    was killed mid-run by a deploy/restart — and is marked failed so it stops
-    permanently blocking future runs.
-    """
-    cutoff = frappe.utils.add_to_date(now_datetime(), minutes=-STALE_RUNNING_THRESHOLD_MINUTES)
-    running = frappe.get_all(
-        "Cloudstore Sync Log",
-        filters={"sync_type": "items", "status": "running"},
-        fields=["name", "started_at"],
-    )
-    active = False
-    for row in running:
-        if row.started_at and row.started_at < cutoff:
-            frappe.db.set_value("Cloudstore Sync Log", row.name, {
-                "status": "failed",
-                "finished_at": now_datetime(),
-                "error_message": "Marked failed: orphaned running log (worker likely restarted mid-run).",
-            })
-        else:
-            active = True
-    if running:
-        frappe.db.commit()
-    return active
+# Item Supplier Attribute keys written by the stock sync (sync_stock.py).
+STOCK_ATTRIBUTE_KEYS = ("cloudstore_qty", "cloudstore_stock", "cloudstore_stock_at")
 
 
 def run(trigger: str = "scheduled") -> str:
@@ -60,17 +34,9 @@ def run(trigger: str = "scheduled") -> str:
     Returns:
         The name (ID) of the Cloudstore Sync Log document.
     """
-    if _has_active_items_sync():
-        log = frappe.new_doc("Cloudstore Sync Log")
-        log.sync_type = "items"
-        log.trigger = trigger
-        log.status = "skipped"
-        log.started_at = now_datetime()
-        log.finished_at = now_datetime()
-        log.error_message = "Skipped: another items sync is already running."
-        log.insert(ignore_permissions=True)
-        frappe.db.commit()
-        return log.name
+    skipped = skip_if_active("items", trigger)
+    if skipped:
+        return skipped
 
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "items"
@@ -581,10 +547,12 @@ def _upsert_supplier_attributes(item_code: str, supplier: str, attrs: dict):
     if not supplier or not frappe.db.exists("DocType", "Item Supplier Attribute"):
         return
     item = frappe.get_doc("Item", item_code)
-    # Replace existing rows for this connector so we don't accumulate duplicates
+    # Replace existing rows for this connector so we don't accumulate duplicates.
+    # The cloudstore_* stock rows belong to the stock sync and are kept.
     item.set("supplier_attributes", [
         r for r in (getattr(item, "supplier_attributes", None) or [])
         if not (r.supplier == supplier and r.connector_name == "cloudstore")
+        or r.attribute_key in STOCK_ATTRIBUTE_KEYS
     ])
     for key, value in attrs.items():
         if value:

@@ -21,6 +21,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 from alaiy_os_connector_cloudstore.cloudstore.item_events import ITEM_EVENTS, apply_item_event
 from alaiy_os_connector_cloudstore.cloudstore.sync_orders import apply_order_event
 
@@ -29,6 +30,10 @@ _MAX_PAGES = 20
 
 def run(trigger: str = "scheduled") -> str:
     """Background job: read pending events, apply them, one Sync Log row."""
+    skipped = skip_if_active("events", trigger)
+    if skipped:
+        return skipped
+
     log = frappe.new_doc("Cloudstore Sync Log")
     log.sync_type = "events"
     log.trigger = trigger
