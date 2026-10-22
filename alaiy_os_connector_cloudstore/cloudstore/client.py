@@ -4,10 +4,17 @@
 import requests
 import frappe
 
+from alaiy_os_connector_cloudstore.cloudstore.endpoints import (
+    Categories, Events, Inventory, Items, Orders,
+)
+
 
 class CloudstoreClient:
     """
-    Thin HTTP client for the Cloudstore API.
+    HTTP transport for the Cloudstore API.
+
+    Endpoints are grouped per resource in cloudstore/endpoints and reached as
+    client.categories / items / orders / events / inventory.
 
     Reads connection settings from the "Cloudstore Connector Settings" Single
     DocType so credentials are never hard-coded.
@@ -42,32 +49,57 @@ class CloudstoreClient:
             {"Authorization": f"Bearer {self.bearer_token}"}
         )
 
+        # One object per API resource, each wrapping this client's transport.
+        self.categories = Categories(self)
+        self.items = Items(self)
+        self.orders = Orders(self)
+        self.events = Events(self)
+        self.inventory = Inventory(self)
+
     # ------------------------------------------------------------------
-    # Low-level GET
+    # Low-level HTTP
     # ------------------------------------------------------------------
 
-    def get(self, path: str, params: dict = None) -> dict | list:
+    def request(self, method: str, path: str, params: dict = None, json=None,
+                files: dict = None) -> dict | list:
         """
-        Send a GET request to api_url + path.
-
-        Args:
-            path:   URL path relative to api_url, e.g. "/categories/tree".
-            params: Optional query-string parameters dict.
-
-        Returns:
-            Parsed JSON response (dict or list).
+        Send an HTTP request to api_url + path (or to path itself when it is a
+        full URL) and return the parsed JSON body ({} when the body is empty).
 
         Raises:
             RuntimeError: when the server returns a non-2xx status code.
         """
-        url = f"{self.api_url}{path}"
-        resp = self._session.get(url, params=params, timeout=20)
+        url = path if path.startswith("http") else f"{self.api_url}{path}"
+        resp = self._session.request(
+            method, url, params=params, json=json, files=files, timeout=20
+        )
         if not resp.ok:
             raise RuntimeError(
                 f"Cloudstore API error {resp.status_code} for {url}: "
                 f"{resp.text[:300]}"
             )
-        return resp.json()
+        return resp.json() if resp.content else {}
+
+    def get(self, path: str, params: dict = None) -> dict | list:
+        """GET api_url + path, e.g. get("/categories/tree")."""
+        return self.request("GET", path, params=params)
+
+    def swagger(self) -> dict:
+        """The OpenAPI spec of the configured environment."""
+        return self.get("/swagger.json")
+
+    def post(self, path: str, json=None, params: dict = None, files: dict = None) -> dict | list:
+        """POST with a JSON body (json=) or a multipart upload (files=)."""
+        return self.request("POST", path, params=params, json=json, files=files)
+
+    def put(self, path: str, json=None) -> dict | list:
+        return self.request("PUT", path, json=json)
+
+    def patch(self, path: str, json=None) -> dict | list:
+        return self.request("PATCH", path, json=json)
+
+    def delete(self, path: str) -> dict | list:
+        return self.request("DELETE", path)
 
     # ------------------------------------------------------------------
     # Paginated GET

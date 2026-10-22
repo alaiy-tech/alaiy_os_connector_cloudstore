@@ -42,6 +42,21 @@ def check_and_enqueue():
         sync_type="items",
         enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_items.run",
     )
+    _maybe_enqueue(
+        interval_setting=settings.cs_stock_sync_interval,
+        sync_type="stock",
+        enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_stock.run",
+    )
+    _maybe_enqueue(
+        interval_setting=settings.cs_orders_sync_interval,
+        sync_type="orders",
+        enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_orders.run",
+    )
+    _maybe_enqueue(
+        interval_setting=settings.cs_events_sync_interval,
+        sync_type="events",
+        enqueue_fn="alaiy_os_connector_cloudstore.cloudstore.sync_events.run",
+    )
 
 
 def _maybe_enqueue(interval_setting: str, sync_type: str, enqueue_fn: str):
@@ -50,7 +65,7 @@ def _maybe_enqueue(interval_setting: str, sync_type: str, enqueue_fn: str):
 
     Args:
         interval_setting: Value from the Select field, e.g. "Disabled", "5 min".
-        sync_type:        "categories" or "items".
+        sync_type:        "categories", "items", "stock", "orders" or "events".
         enqueue_fn:       Dotted path to the Frappe-enqueue-able function.
     """
     # "Disabled" or any unrecognised value — do nothing

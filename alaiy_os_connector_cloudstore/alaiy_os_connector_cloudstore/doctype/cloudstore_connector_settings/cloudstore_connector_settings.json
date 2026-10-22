@@ -18,7 +18,14 @@
     "sb_schedule",
     "cs_page_size",
     "cs_category_sync_interval",
-    "cs_items_sync_interval"
+    "cs_items_sync_interval",
+    "cs_stock_sync_interval",
+    "cs_orders_sync_interval",
+    "sb_orders",
+    "cs_push_orders",
+    "cs_order_push_status",
+    "sb_events",
+    "cs_events_sync_interval"
   ],
   "fields": [
     {
@@ -119,6 +126,55 @@
       "label": "Items Sync Interval",
       "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
       "reqd": 1
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to update stock only (no item changes). Keeps Cloudstore quantities on each Item and sets ERPNext stock where it differs.",
+      "fieldname": "cs_stock_sync_interval",
+      "fieldtype": "Select",
+      "label": "Stock Sync Interval",
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to refresh the status of Sales Orders already sent to Cloudstore.",
+      "fieldname": "cs_orders_sync_interval",
+      "fieldtype": "Select",
+      "label": "Order Status Refresh Interval",
+      "options": "Disabled\n5 min\n10 min\n30 min"
+    },
+    {
+      "fieldname": "sb_orders",
+      "fieldtype": "Section Break",
+      "label": "Orders"
+    },
+    {
+      "default": "0",
+      "description": "Sends a Sales Order on submit and cancels it on Cloudstore when it is cancelled. Only lines for Cloudstore items are sent.",
+      "fieldname": "cs_push_orders",
+      "fieldtype": "Check",
+      "label": "Send Sales Orders to Cloudstore"
+    },
+    {
+      "default": "PENDING",
+      "description": "Status the order is created with. Cloudstore allows only PENDING or CONFIRMED on create; CONFIRMED needs the items.",
+      "fieldname": "cs_order_push_status",
+      "fieldtype": "Select",
+      "label": "Status When Sent",
+      "options": "PENDING\nCONFIRMED"
+    },
+    {
+      "fieldname": "sb_events",
+      "fieldtype": "Section Break",
+      "label": "Events"
+    },
+    {
+      "default": "Disabled",
+      "description": "How often to read Cloudstore events (order status, shipments, stock, prices) and apply them.",
+      "fieldname": "cs_events_sync_interval",
+      "fieldtype": "Select",
+      "label": "Events Interval",
+      "options": "Disabled\n5 min\n10 min\n30 min"
     }
   ],
   "is_single": 1,

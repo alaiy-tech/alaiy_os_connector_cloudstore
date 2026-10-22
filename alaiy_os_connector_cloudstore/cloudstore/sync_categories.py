@@ -37,7 +37,7 @@ def run(trigger: str = "scheduled") -> str:
     try:
         _ensure_root_item_group()
         client = CloudstoreClient()
-        tree = client.get("/categories/tree")
+        tree = client.categories.tree()
 
         stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0}
         _sync_tree(tree, "All Item Groups", log, stats)

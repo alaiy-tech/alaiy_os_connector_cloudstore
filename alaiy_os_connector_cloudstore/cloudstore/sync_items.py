@@ -5,6 +5,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
+from alaiy_os_connector_cloudstore.cloudstore.item_attributes import build_supplier_attributes
 
 
 # ---------------------------------------------------------------------------
@@ -98,11 +99,19 @@ def run(trigger: str = "scheduled") -> str:
         wh_cache = {row.cs_wh_id: row.warehouse for row in (settings.cs_warehouse_mapping or [])}
 
         stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0}
+
+        # Settings that make parts of the data silently not get stored.
+        for field, what in (
+            ("cs_supplier", "Item Supplier rows and supplier attributes"),
+            ("cs_price_list", "selling prices"),
+            ("cs_buying_price_list", "buying prices"),
+        ):
+            if not (settings.get(field) or "").strip():
+                _append_log(log, f"WARNING: {field} is not set, {what} are not stored.")
+        stock_failed = ""
         stock_batch = []  # collect {"item_code", "warehouse", "qty"} dicts across all pages
 
-        for content, metadata in client.get_paginated(
-            "/items", params={"withQuantities": "true"}
-        ):
+        for content, metadata in client.items.paginated():
             if log.pages_total == 0:
                 log.pages_total = int(metadata.get("total_pages", 0))
 
@@ -141,13 +150,18 @@ def run(trigger: str = "scheduled") -> str:
             try:
                 _submit_stock_reconciliation(stock_batch)
             except Exception as exc:
-                _append_log(log, f"WARNING: Stock Reconciliation failed: {exc}")
+                _append_log(log, f"ERROR: Stock Reconciliation failed: {exc}")
+                stock_failed = str(exc)
                 frappe.log_error(
                     title="Cloudstore: stock reconciliation failed",
                     message=frappe.get_traceback(),
                 )
 
-        log.status = "success"
+        if stock_failed:
+            log.status = "failed"
+            log.error_message = f"Items synced but stock was not updated: {stock_failed}"[:1000]
+        else:
+            log.status = "success"
 
     except Exception as exc:
         log.status = "failed"
@@ -398,6 +412,8 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
 
     variant.variant_of = template_code
     variant.item_name = title
+    if description:
+        variant.description = description
     variant.item_group = item_group or "All Item Groups"
     if brand:
         variant.brand = brand
@@ -424,8 +440,13 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     if variant.stock_uom not in existing_uoms:
         variant.append("uoms", {"uom": variant.stock_uom, "conversion_factor": 1.0})
 
-    if mnf_barcode:
-        _ensure_barcode(variant, mnf_barcode)
+    # Every barcode Cloudstore gives: manufacturer barcode, EAN and its own barcode.
+    for code in dict.fromkeys(
+        [(props.get(k) or "").strip() for k in ("mnf_barcode", "ean", "barcode")]
+        + [(b.get("code") or "").strip() for b in (item_data.get("barcodes") or [])]
+    ):
+        if code:
+            _ensure_barcode(variant, code)
 
     variant.flags.ignore_validate = True
     if variant_is_new:
@@ -452,21 +473,10 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
         _upsert_item_supplier(sku, supplier, sku)
         _upsert_item_supplier(template_code, supplier, sku_parent)
 
-        attrs = {
-            "mnf_color":      props.get("mnf_color", ""),
-            "mnf_color_code": mnf_color_code,
-            "season":         props.get("season", ""),
-            "season_short":   props.get("season_short", ""),
-            "collection":     props.get("collection", ""),
-            "age":            props.get("age", ""),
-            "hs_code":        props.get("hs_code", ""),
-            "made_in_code":   props.get("made_in_code", ""),
-            "po":             props.get("po", ""),
-            "size_grid":      props.get("size_grid", ""),
-            "title_en":       _pick_locale(singles.get("title")),
-            "desc_en":        _pick_locale(singles.get("desc")),
-        }
+        attrs = build_supplier_attributes(item_data, mnf_color_code)
         _upsert_supplier_attributes(template_code, supplier, attrs)
+        # Per-size values (ean, barcode, size, update time, reservations) live on the variant.
+        _upsert_supplier_attributes(sku, supplier, attrs)
 
     # Slideshow for additional images (linked to template)
     if extra_image_urls:
@@ -480,6 +490,44 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     )
 
     return ("created" if variant_is_new else "updated"), stock_entries
+
+
+def upsert_batch(items: list) -> dict:
+    """
+    Store a list of Cloudstore item objects (the same shape /items returns)
+    exactly like the scheduled sync does: Items, prices, supplier data and
+    one Stock Reconciliation. Used for on-demand syncs of chosen items.
+
+    Returns:
+        {"processed", "created", "updated", "failed", "errors": [...]}
+        A stock reconciliation failure is raised after the items are saved.
+    """
+    settings = frappe.get_single("Cloudstore Connector Settings")
+    _ensure_item_attributes()
+    attr_cache = {}
+    default_warehouse = _ensure_warehouse((settings.cs_sync_warehouse or "").strip())
+    wh_cache = {row.cs_wh_id: row.warehouse for row in (settings.cs_warehouse_mapping or [])}
+
+    stats = {"processed": 0, "created": 0, "updated": 0, "failed": 0, "errors": []}
+    stock_batch = []
+    for item_data in items:
+        try:
+            action, stock_entries = _upsert_item(
+                item_data, settings, attr_cache, wh_cache, default_warehouse
+            )
+            stats["processed"] += 1
+            stats["created" if action == "created" else "updated"] += 1
+            stock_batch.extend(stock_entries)
+        except Exception as exc:
+            sku = item_data.get("sku", "unknown")
+            stats["failed"] += 1
+            stats["errors"].append(f"{sku}: {exc}")
+            frappe.log_error(title=f"Cloudstore item sync error: {sku}", message=frappe.get_traceback())
+        frappe.db.commit()
+
+    if stock_batch:
+        _submit_stock_reconciliation(stock_batch)
+    return stats
 
 
 # ---------------------------------------------------------------------------
@@ -600,6 +648,8 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
     default warehouse using the item's top-level qty if Cloudstore didn't
     report a whs[] breakdown for this item.
     """
+    if "whs" not in item_data and "qty" not in item_data:
+        return []  # reply came without quantities: leave stock alone
     whs = item_data.get("whs") or []
     if not whs:
         return [{
