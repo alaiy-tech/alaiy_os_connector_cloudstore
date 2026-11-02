@@ -638,6 +638,14 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
     return entries
 
 
+def _valuation_rate(item_code: str, warehouse: str):
+    """Valuation rate held for the item in the warehouse, else the item's own rate. None when neither is set."""
+    rate = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
+    if not rate:
+        rate = frappe.db.get_value("Item", item_code, "valuation_rate")
+    return float(rate) if rate else None
+
+
 def _submit_stock_reconciliation(entries: list):
     """
     Submit one Stock Reconciliation covering all synced variants — each
@@ -651,8 +659,18 @@ def _submit_stock_reconciliation(entries: list):
     and fall back to the company's Temporary Opening account on that
     specific validation error.
     """
-    entries = [e for e in entries if e.get("warehouse")]
-    if not entries:
+    rows = []
+    for entry in entries:
+        if not entry.get("warehouse"):
+            continue
+        # ERPNext needs a cost to value stock it has no record of. Cloudstore
+        # sends none, so take the one already held for the item. Rows with no
+        # cost anywhere are skipped rather than failing the whole reconciliation.
+        rate = _valuation_rate(entry["item_code"], entry["warehouse"])
+        if rate is None:
+            continue
+        rows.append({**entry, "valuation_rate": rate})
+    if not rows:
         return
     company = frappe.defaults.get_global_default("company")
 
@@ -662,11 +680,12 @@ def _submit_stock_reconciliation(entries: list):
         recon.company = company
         if expense_account:
             recon.expense_account = expense_account
-        for entry in entries:
+        for entry in rows:
             recon.append("items", {
-                "item_code": entry["item_code"],
-                "warehouse": entry["warehouse"],
-                "qty":       entry["qty"],
+                "item_code":      entry["item_code"],
+                "warehouse":      entry["warehouse"],
+                "qty":            entry["qty"],
+                "valuation_rate": entry["valuation_rate"],
             })
         recon.flags.ignore_permissions = True
         return recon
