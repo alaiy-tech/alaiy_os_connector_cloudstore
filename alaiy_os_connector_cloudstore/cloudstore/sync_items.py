@@ -376,7 +376,10 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     else:
         variant = frappe.get_doc("Item", sku)
 
-    variant.variant_of = template_code
+    # ERPNext rejects changing Variant Of on an existing item, so the parent is
+    # set only when the item is new or has none yet.
+    if variant_is_new or not variant.variant_of:
+        variant.variant_of = template_code
     variant.item_name = title
     if description:
         variant.description = description
