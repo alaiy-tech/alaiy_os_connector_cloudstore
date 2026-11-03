@@ -69,8 +69,10 @@ It never creates or edits Items.
 4. After each page: saves `pages_done`, `items_processed` (items seen),
    `items_updated` (items with a changed quantity), `items_failed`, commits.
    A failing item is logged as `ERROR sku=<sku>: ...` and counted.
-5. After the last page, submits the changed entries as Stock Reconciliations of
-   200 entries each. A failing chunk is logged and does not stop the next
+5. After the last page, adds an entry with quantity 0 for each Cloudstore item that
+   still has stock in the sync warehouses but was not in the list (sold out; see
+   known-gaps.md for the safety rules), then submits the changed entries as Stock
+   Reconciliations of 200 entries each. A quantity 0 row needs no valuation rate. A failing chunk is logged and does not stop the next
    chunk.
 6. Final log line: `Seen <n>, not in ERPNext <n>, stock changed on <n>.`
    `status=failed` with `error_message` "Stock was not updated: ..." when any

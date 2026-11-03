@@ -33,6 +33,7 @@ Behaviour that is missing or limited, as it is in the code.
 | Price 0 | A price of 0 is skipped, so an existing price stays. |
 | Item sync stock | The item sync reconciles every item on every run, even when the quantity did not change. The stock-only sync reconciles changed quantities only. |
 | Overwrite | A reconciliation replaces the ERPNext quantity with the Cloudstore quantity. |
+| Sold out | The Cloudstore item list holds only items that are in stock. After a complete read, the stock sync sets ERPNext stock to 0 for Cloudstore items that still have stock but are no longer listed. It skips this when the list is under half the size of the last good run, or when it would zero more than half of the stocked items. The item sync does not zero anything. |
 | Valuation | Each reconciliation row carries the item's valuation rate, else the warehouse rate. A row with neither is skipped and counted; the run is then marked `failed` with the count. A warehouse rate that differs from the item's rate counts as a change, so the row is re-valued. |
 | Cost | `sale_price` is written to the optional **Cost Price List**. Nothing in the connector reads that list; the client app sets item valuation from it. |
 | Failed reconciliation | Insert and submit run in a savepoint, so a failure leaves no draft document. |
