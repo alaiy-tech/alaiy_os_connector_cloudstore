@@ -4,6 +4,11 @@
 import frappe
 from frappe.utils import now_datetime, add_to_date
 
+from alaiy_os_connector_cloudstore.cloudstore.run_guard import active_run
+
+# After a failed run, wait at least this long (or the interval, if longer) before trying again.
+FAILURE_BACKOFF_MINUTES = 5
+
 
 _INTERVAL_MINUTES = {
     "1 min": 1,
@@ -21,8 +26,9 @@ def check_and_enqueue():
     for each sync type, decides whether to enqueue a background job based on:
 
     - Whether the interval is "Disabled" (skip).
-    - Whether a job is already running (started within the last 30 minutes).
-    - Whether the last successful run is still within the configured interval.
+    - Whether a job is genuinely still running (the run guard's 120-minute rule).
+    - Whether the last attempt is still inside its wait: the interval after a
+      success, and at least FAILURE_BACKOFF_MINUTES after a failure.
     """
     if not frappe.db.exists("DocType", "Cloudstore Sync Log"):
         return
@@ -76,31 +82,24 @@ def _maybe_enqueue(interval_setting: str, sync_type: str, enqueue_fn: str):
     now = now_datetime()
 
     # ------------------------------------------------------------------
-    # Guard: a running job started within the last 30 minutes
+    # Guard: a run is genuinely still in flight (also clears orphaned logs)
     # ------------------------------------------------------------------
-    running_started_at = frappe.db.get_value(
-        "Cloudstore Sync Log",
-        {"sync_type": sync_type, "status": "running"},
-        "started_at",
-        order_by="started_at desc",
-    )
-    if running_started_at:
-        elapsed_seconds = (now - running_started_at).total_seconds()
-        if elapsed_seconds < 1800:
-            return
+    if active_run(sync_type):
+        return
 
     # ------------------------------------------------------------------
-    # Guard: last successful run is still within the configured interval
+    # Guard: the last attempt is still inside its wait
     # ------------------------------------------------------------------
-    last_success_started_at = frappe.db.get_value(
+    last_attempt = frappe.db.get_value(
         "Cloudstore Sync Log",
-        {"sync_type": sync_type, "status": "success"},
-        "started_at",
+        {"sync_type": sync_type, "status": ["in", ["success", "failed"]]},
+        ["status", "started_at"],
         order_by="started_at desc",
+        as_dict=True,
     )
-    if last_success_started_at:
-        due_at = add_to_date(last_success_started_at, minutes=interval_minutes)
-        if now < due_at:
+    if last_attempt and last_attempt.started_at:
+        wait = interval_minutes if last_attempt.status == "success" else max(interval_minutes, FAILURE_BACKOFF_MINUTES)
+        if now < add_to_date(last_attempt.started_at, minutes=wait):
             return
 
     # Due — enqueue on the long queue
