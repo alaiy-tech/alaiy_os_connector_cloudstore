@@ -6,8 +6,8 @@ Behaviour that is missing or limited, as it is in the code.
 
 | Area | Fact |
 |---|---|
-| Client | No retry, no backoff, no handling of HTTP 429. One failed request fails the call. Timeout is 20 seconds for every call. |
-| Scheduler | A failed run is due again on the next minute tick. Only successful runs delay the next one. |
+| Client | GET requests are retried up to three times (2, 5 and 10 seconds) on HTTP 429, 502, 503, 504 and on connection errors and timeouts. A `Retry-After` header is honoured up to 60 seconds. Other methods are never retried, so a create call cannot be sent twice. 401 and 403 fail at once. Rate-limit headers are not logged. Timeout is 20 seconds for every call. |
+| Scheduler | After a failed run the next try waits at least five minutes, or the interval if longer. A run is treated as still running for 120 minutes; an older `running` log is marked failed. |
 | Order push | The orders job retries pushes that failed for a transient reason (network error, HTTP 429 or 5xx) for 2 days after the Sales Order date. A rejection by Cloudstore (HTTP 4xx) is not retried; fix the cause and call `push_sales_order`. A failed cancel is not retried. Retries need **Order Status Refresh Interval** to be set. |
 | Settings page | `trigger_categories_sync` and `trigger_items_sync` have no role check. |
 
@@ -33,7 +33,9 @@ Behaviour that is missing or limited, as it is in the code.
 | Price 0 | A price of 0 is skipped, so an existing price stays. |
 | Item sync stock | The item sync reconciles every item on every run, even when the quantity did not change. The stock-only sync reconciles changed quantities only. |
 | Overwrite | A reconciliation replaces the ERPNext quantity with the Cloudstore quantity. |
-| Valuation | Stock Reconciliation rows carry no valuation rate. |
+| Valuation | Each reconciliation row carries the item's valuation rate, else the warehouse rate. A row with neither is skipped and counted; the run is then marked `failed` with the count. A warehouse rate that differs from the item's rate counts as a change, so the row is re-valued. |
+| Cost | `sale_price` is written to the optional **Cost Price List**. Nothing in the connector reads that list; the client app sets item valuation from it. |
+| Failed reconciliation | Insert and submit run in a savepoint, so a failure leaves no draft document. |
 | Warehouses | An unmapped Cloudstore warehouse id is mapped to the default warehouse until someone changes the row. |
 | Volume | An item has about 30 Item Supplier Attribute rows on the template and on each variant. |
 | Customer prices | `customerId` is never sent, so customer-specific prices are not read. |

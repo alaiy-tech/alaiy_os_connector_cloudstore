@@ -26,9 +26,10 @@ Cloudstore.
 | | `cs_sync_warehouse` | Default Sync Warehouse | Link Warehouse | | yes | Warehouse for unmapped Cloudstore warehouse IDs |
 | | `cs_warehouse_mapping` | Warehouse Mapping | Table | | | Cloudstore warehouse ID to ERPNext Warehouse |
 | | `cs_buying_price_list` | Buying Price List | Link Price List | | yes | Receives `stock_price` |
+| | `cs_cost_price_list` | Cost Price List | Link Price List | | | Receives `sale_price` (the supplier cost, EUR). Optional: nothing is written when empty |
 | | `cs_price_list` | Selling Price List | Link Price List | | yes | Receives `sale_price` |
 | Sync Schedule | `cs_page_size` | Page Size | Int | 250 | yes | Items per `/items` request. Cloudstore maximum is 250. |
-| | `cs_category_sync_interval` | Category Sync Interval | Select | Disabled | yes | `Disabled`, `1 min`, `5 min`, `10 min`, `30 min` |
+| | `cs_category_sync_interval` | Category Sync Interval | Select | Disabled | yes | `Disabled`, `1 min`, `5 min`, `10 min`, `30 min`, `1 hour`, `6 hours`, `1 day` |
 | | `cs_items_sync_interval` | Items Sync Interval | Select | Disabled | yes | same options |
 | | `cs_stock_sync_interval` | Stock Sync Interval | Select | Disabled | | same options |
 | | `cs_orders_sync_interval` | Order Status Refresh Interval | Select | Disabled | | `Disabled`, `5 min`, `10 min`, `30 min` |

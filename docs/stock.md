@@ -25,7 +25,13 @@ returns one entry `{item_code, warehouse, qty}` per element of `whs[]`:
 
 - One Stock Reconciliation, purpose `Stock Reconciliation`, company = the
   global default company, one row per entry with `item_code`, `warehouse`,
-  `qty`. No valuation rate is set.
+  `qty` and `valuation_rate`.
+- The valuation rate is the item's own `valuation_rate`, else the rate held in
+  that warehouse. An entry with neither is skipped. The function returns the
+  number of skipped entries, and the stock, item and event paths log it. The
+  stock and item runs end `failed` when it is not zero.
+- Insert and submit run in a savepoint: if either step fails the insert is
+  undone and no draft is left.
 - `expense_account` is the company's `stock_adjustment_account`.
 - If ERPNext rejects it with an error containing `Opening Entry` (no earlier
   stock ledger entry for an item and warehouse), it is rebuilt with the
@@ -57,7 +63,8 @@ It never creates or edits Items.
    - builds the stock entries as above,
    - if **Supplier** is set, stores Cloudstore's numbers (below),
    - keeps only entries whose quantity differs from `Bin.actual_qty` of that
-     item and warehouse (no Bin counts as 0). Entries without a warehouse are
+     item and warehouse (no Bin counts as 0), or whose `Bin.valuation_rate`
+     differs from the item's valuation rate. Entries without a warehouse are
      skipped.
 4. After each page: saves `pages_done`, `items_processed` (items seen),
    `items_updated` (items with a changed quantity), `items_failed`, commits.
@@ -67,7 +74,8 @@ It never creates or edits Items.
    chunk.
 6. Final log line: `Seen <n>, not in ERPNext <n>, stock changed on <n>.`
    `status=failed` with `error_message` "Stock was not updated: ..." when any
-   chunk failed, otherwise `success`.
+   chunk failed, or "<n> stock row(s) not updated: no valuation rate in
+   ERPNext" when rows were skipped, otherwise `success`.
 
 ### Stored Cloudstore quantities
 
