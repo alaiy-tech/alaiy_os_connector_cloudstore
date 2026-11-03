@@ -627,11 +627,13 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
     if "whs" not in item_data and "qty" not in item_data:
         return []  # reply came without quantities: leave stock alone
     whs = item_data.get("whs") or []
+    cost_eur = _cloudstore_cost_eur(item_data)
     if not whs:
         return [{
             "item_code": sku,
             "warehouse": default_warehouse,
             "qty": float(item_data.get("qty") or 0),
+            "cost_eur": cost_eur,
         }]
 
     entries = []
@@ -642,8 +644,31 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
             "item_code": sku,
             "warehouse": warehouse,
             "qty": float(row.get("qty") or 0),
+            "cost_eur": cost_eur,
         })
     return entries
+
+
+def _cloudstore_cost_eur(item_data: dict):
+    """CloudStore sale_price when set, else stock_price, in EUR. None when neither is set."""
+    price = item_data.get("sale_price") or item_data.get("stock_price")
+    return float(price) if price else None
+
+
+def _cloudstore_valuation_rate(cost_eur):
+    """CloudStore EUR cost converted to the company currency with the rate stored in ERPNext.
+    None when there is no cost or no EUR rate is stored (the row is then skipped and counted)."""
+    if not cost_eur:
+        return None
+    from erpnext.setup.utils import get_exchange_rate
+    from frappe.utils import nowdate
+
+    company = frappe.defaults.get_global_default("company")
+    currency = frappe.get_cached_value("Company", company, "default_currency")
+    rate = get_exchange_rate("EUR", currency, nowdate())
+    if not rate:
+        return None
+    return round(float(cost_eur) * float(rate), 2)
 
 
 def _valuation_rate(item_code: str, warehouse: str):
@@ -679,6 +704,8 @@ def _submit_stock_reconciliation(entries: list):
         # sends none, so take the one already held for the item. Rows with no
         # cost anywhere are skipped rather than failing the whole reconciliation.
         rate = _valuation_rate(entry["item_code"], entry["warehouse"])
+        if rate is None:
+            rate = _cloudstore_valuation_rate(entry.get("cost_eur"))
         if rate is None:
             skipped += 1
             continue
