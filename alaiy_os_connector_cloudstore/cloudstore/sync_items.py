@@ -114,7 +114,10 @@ def run(trigger: str = "scheduled") -> str:
         # one per variant. Each entry already carries its own resolved warehouse.
         if stock_batch:
             try:
-                _submit_stock_reconciliation(stock_batch)
+                skipped = _submit_stock_reconciliation(stock_batch)
+                if skipped:
+                    _append_log(log, f"ERROR: {skipped} stock row(s) skipped: no valuation rate in ERPNext.")
+                    stock_failed = f"{skipped} stock row(s) skipped: no valuation rate"
             except Exception as exc:
                 _append_log(log, f"ERROR: Stock Reconciliation failed: {exc}")
                 stock_failed = str(exc)
@@ -495,7 +498,9 @@ def upsert_batch(items: list) -> dict:
         frappe.db.commit()
 
     if stock_batch:
-        _submit_stock_reconciliation(stock_batch)
+        skipped = _submit_stock_reconciliation(stock_batch)
+        if skipped:
+            stats["errors"].append(f"stock: {skipped} row(s) skipped, no valuation rate")
     return stats
 
 
@@ -661,8 +666,12 @@ def _submit_stock_reconciliation(entries: list):
     are "opening" for a brand-new warehouse, try the normal account first
     and fall back to the company's Temporary Opening account on that
     specific validation error.
+
+    Returns the number of entries skipped because no valuation rate exists.
+    Callers must treat a non-zero count as a failed stock update, not a success.
     """
     rows = []
+    skipped = 0
     for entry in entries:
         if not entry.get("warehouse"):
             continue
@@ -671,10 +680,11 @@ def _submit_stock_reconciliation(entries: list):
         # cost anywhere are skipped rather than failing the whole reconciliation.
         rate = _valuation_rate(entry["item_code"], entry["warehouse"])
         if rate is None:
+            skipped += 1
             continue
         rows.append({**entry, "valuation_rate": rate})
     if not rows:
-        return
+        return skipped
     company = frappe.defaults.get_global_default("company")
 
     def _build_recon(expense_account):
@@ -713,6 +723,7 @@ def _submit_stock_reconciliation(entries: list):
         recon.insert()
         recon.submit()
     frappe.db.commit()
+    return skipped
 
 
 # ---------------------------------------------------------------------------

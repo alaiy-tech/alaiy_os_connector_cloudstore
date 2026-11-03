@@ -54,13 +54,16 @@ def apply_item_event(event: dict, settings) -> str:
             stock_entries.append({"item_code": item_code, "warehouse": warehouse, "qty": float(row["qty"])})
         done += 1
 
+    stock_skipped = 0
     if stock_entries:
-        _submit_stock_reconciliation(stock_entries)
+        stock_skipped = _submit_stock_reconciliation(stock_entries)
     frappe.db.commit()
 
     note = ""
     if event_type in STOCK_EVENTS and not warehouse:
         note = " Stock not applied: Cloudstore stock maps to more than one warehouse, next full sync sets it."
+    if stock_skipped:
+        note += f" {stock_skipped} stock row(s) skipped: no valuation rate in ERPNext."
     return f"{event_type}: {done} item(s) applied, {skipped} not in ERPNext.{note}"
 
 

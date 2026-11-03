@@ -86,18 +86,24 @@ def run(trigger: str = "scheduled") -> str:
             frappe.db.commit()
 
         stock_error = ""
+        stock_skipped = 0
         for i in range(0, len(changed_entries), _RECONCILE_CHUNK):
             try:
-                _submit_stock_reconciliation(changed_entries[i:i + _RECONCILE_CHUNK])
+                stock_skipped += _submit_stock_reconciliation(changed_entries[i:i + _RECONCILE_CHUNK])
             except Exception as exc:
                 stock_error = str(exc)
                 _append(log, f"ERROR: Stock Reconciliation failed: {exc}")
                 frappe.log_error(title="Cloudstore stock reconciliation failed", message=frappe.get_traceback())
 
         _append(log, f"Seen {stats['seen']}, not in ERPNext {stats['unknown']}, stock changed on {stats['changed']}.")
+        if stock_skipped:
+            _append(log, f"ERROR: {stock_skipped} stock row(s) skipped: no valuation rate in ERPNext.")
         if stock_error:
             log.status = "failed"
             log.error_message = f"Stock was not updated: {stock_error}"[:1000]
+        elif stock_skipped:
+            log.status = "failed"
+            log.error_message = f"{stock_skipped} stock row(s) not updated: no valuation rate in ERPNext"
         else:
             log.status = "success"
     except Exception as exc:
