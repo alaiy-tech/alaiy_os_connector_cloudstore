@@ -1,12 +1,22 @@
 # Copyright (c) 2026, Alaiy and contributors
 # For license information, please see license.txt
 
+import time
+
 import requests
 import frappe
 
 from alaiy_os_connector_cloudstore.cloudstore.endpoints import (
     Categories, Events, Inventory, Items, Orders,
 )
+
+
+# GET requests are retried on these statuses and on connection errors. Other methods are
+# never retried, so a create call cannot be sent twice.
+_RETRY_STATUSES = {429, 502, 503, 504}
+_MAX_RETRIES = 3
+_BACKOFF_SECONDS = (2, 5, 10)
+_MAX_RETRY_AFTER_SECONDS = 60
 
 
 class CloudstoreClient:
@@ -70,15 +80,35 @@ class CloudstoreClient:
             RuntimeError: when the server returns a non-2xx status code.
         """
         url = path if path.startswith("http") else f"{self.api_url}{path}"
-        resp = self._session.request(
-            method, url, params=params, json=json, files=files, timeout=20
-        )
+        retriable = method.upper() == "GET"
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                resp = self._session.request(
+                    method, url, params=params, json=json, files=files, timeout=20
+                )
+            except (requests.ConnectionError, requests.Timeout):
+                if not retriable or attempt == _MAX_RETRIES:
+                    raise
+                time.sleep(_BACKOFF_SECONDS[attempt])
+                continue
+            if retriable and resp.status_code in _RETRY_STATUSES and attempt < _MAX_RETRIES:
+                time.sleep(self._retry_delay(resp, attempt))
+                continue
+            break
         if not resp.ok:
             raise RuntimeError(
                 f"Cloudstore API error {resp.status_code} for {url}: "
                 f"{resp.text[:300]}"
             )
         return resp.json() if resp.content else {}
+
+    @staticmethod
+    def _retry_delay(resp, attempt: int) -> int:
+        """Seconds to wait before a retry: the server's Retry-After (capped) when given, else the back-off step."""
+        header = (resp.headers.get("Retry-After") or "").strip()
+        if header.isdigit():
+            return min(int(header), _MAX_RETRY_AFTER_SECONDS)
+        return _BACKOFF_SECONDS[attempt]
 
     def get(self, path: str, params: dict = None) -> dict | list:
         """GET api_url + path, e.g. get("/categories/tree")."""

@@ -16,6 +16,7 @@
     "cs_buying_price_list",
     "cs_cost_price_list",
     "cs_price_list",
+    "cs_extra_parent_skus",
     "sb_schedule",
     "cs_page_size",
     "cs_category_sync_interval",
@@ -105,6 +106,12 @@
       "reqd": 1
     },
     {
+      "description": "Parent SKUs (one per line or comma-separated) that the items sync also reads by code. Use it for styles that the full item list leaves out.",
+      "fieldname": "cs_extra_parent_skus",
+      "fieldtype": "Small Text",
+      "label": "Extra Parent SKUs"
+    },
+    {
       "fieldname": "sb_schedule",
       "fieldtype": "Section Break",
       "label": "Sync Schedule"
@@ -123,7 +130,7 @@
       "fieldname": "cs_category_sync_interval",
       "fieldtype": "Select",
       "label": "Category Sync Interval",
-      "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min\n1 hour\n6 hours\n1 day",
       "reqd": 1
     },
     {
@@ -132,7 +139,7 @@
       "fieldname": "cs_items_sync_interval",
       "fieldtype": "Select",
       "label": "Items Sync Interval",
-      "options": "Disabled\n1 min\n5 min\n10 min\n30 min",
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min\n1 hour\n6 hours\n1 day",
       "reqd": 1
     },
     {
@@ -141,7 +148,7 @@
       "fieldname": "cs_stock_sync_interval",
       "fieldtype": "Select",
       "label": "Stock Sync Interval",
-      "options": "Disabled\n1 min\n5 min\n10 min\n30 min"
+      "options": "Disabled\n1 min\n5 min\n10 min\n30 min\n1 hour\n6 hours\n1 day"
     },
     {
       "default": "Disabled",
