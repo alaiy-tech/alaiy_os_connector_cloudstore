@@ -118,13 +118,20 @@ def run(trigger: str = "scheduled") -> str:
 
 
 def _only_changed(entries: list) -> list:
-    """Entries whose quantity differs from what ERPNext holds now (no Bin counts as 0)."""
+    """Entries whose quantity differs from what ERPNext holds now (no Bin counts as 0), or whose
+    warehouse valuation rate differs from the item's own rate, so a stale rate is re-valued."""
     changed = []
     for e in entries:
         if not e.get("warehouse"):
             continue
-        current = frappe.db.get_value("Bin", {"item_code": e["item_code"], "warehouse": e["warehouse"]}, "actual_qty") or 0
-        if float(current) != float(e["qty"]):
+        bin_row = frappe.db.get_value(
+            "Bin", {"item_code": e["item_code"], "warehouse": e["warehouse"]}, ["actual_qty", "valuation_rate"], as_dict=True
+        )
+        current = (bin_row.actual_qty if bin_row else 0) or 0
+        item_rate = frappe.db.get_value("Item", e["item_code"], "valuation_rate") or 0
+        bin_rate = (bin_row.valuation_rate if bin_row else 0) or 0
+        rate_stale = bool(bin_row) and float(item_rate) > 0 and abs(float(bin_rate) - float(item_rate)) > 0.01
+        if float(current) != float(e["qty"]) or rate_stale:
             changed.append(e)
     return changed
 
