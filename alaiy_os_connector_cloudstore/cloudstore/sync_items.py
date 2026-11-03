@@ -710,6 +710,8 @@ def _submit_stock_reconciliation(entries: list):
         # sends none, so take the one already held for the item. Rows with no
         # cost anywhere are skipped rather than failing the whole reconciliation.
         rate = _valuation_rate(entry["item_code"], entry["warehouse"])
+        if rate is None and not float(entry.get("qty") or 0):
+            rate = 0.0  # emptying a row needs no cost
         if rate is None:
             skipped += 1
             continue

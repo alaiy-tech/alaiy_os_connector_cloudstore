@@ -52,6 +52,7 @@ def run(trigger: str = "scheduled") -> str:
 
         stats = {"seen": 0, "unknown": 0, "changed": 0, "failed": 0}
         changed_entries = []
+        seen_skus = set()
 
         for content, metadata in CloudstoreClient().items.paginated():
             if not log.pages_total:
@@ -62,6 +63,7 @@ def run(trigger: str = "scheduled") -> str:
             ))
             for item_data in content:
                 sku = item_data.get("sku")
+                seen_skus.add(sku)
                 stats["seen"] += 1
                 if sku not in known:
                     stats["unknown"] += 1
@@ -85,6 +87,9 @@ def run(trigger: str = "scheduled") -> str:
             log.save(ignore_permissions=True)
             frappe.db.commit()
 
+        sold_out = _sold_out_entries(settings, seen_skus, log)
+        changed_entries += sold_out
+
         stock_error = ""
         stock_skipped = 0
         for i in range(0, len(changed_entries), _RECONCILE_CHUNK):
@@ -95,7 +100,7 @@ def run(trigger: str = "scheduled") -> str:
                 _append(log, f"ERROR: Stock Reconciliation failed: {exc}")
                 frappe.log_error(title="Cloudstore stock reconciliation failed", message=frappe.get_traceback())
 
-        _append(log, f"Seen {stats['seen']}, not in ERPNext {stats['unknown']}, stock changed on {stats['changed']}.")
+        _append(log, f"Seen {stats['seen']}, not in ERPNext {stats['unknown']}, stock changed on {stats['changed']}, sold out and set to 0 on {len(sold_out)}.")
         if stock_skipped:
             _append(log, f"ERROR: {stock_skipped} stock row(s) skipped: no valuation rate in ERPNext.")
         if stock_error:
@@ -115,6 +120,50 @@ def run(trigger: str = "scheduled") -> str:
         log.save(ignore_permissions=True)
         frappe.db.commit()
     return log.name
+
+
+# The sold-out check is skipped unless the item list looks complete.
+_MIN_FEED_RATIO = 0.5  # listed SKUs must be at least this share of the last good run's count
+_MAX_ZEROED_SHARE = 0.5  # never zero more than this share of the stocked Cloudstore items in one run
+
+
+def _sold_out_entries(settings, seen_skus: set, log) -> list:
+    """
+    Cloudstore's item list holds only items that are in stock. A Cloudstore item that
+    still has stock in ERPNext but is missing from a complete read has sold out, so its
+    stock is set to 0. Skipped, with a log line, when the list is much smaller than the
+    last good run's, or when it would zero more than half of the stocked items.
+    """
+    previous = frappe.db.get_value(
+        "Cloudstore Sync Log",
+        {"sync_type": "stock", "status": "success", "name": ["!=", log.name]},
+        "items_processed",
+        order_by="creation desc",
+    )
+    if not previous or len(seen_skus) < _MIN_FEED_RATIO * float(previous):
+        _append(log, "Sold-out check skipped: the item list is smaller than expected, or there is no earlier good run.")
+        return []
+
+    warehouses = {(settings.cs_sync_warehouse or "").strip()}
+    warehouses.update((row.warehouse or "").strip() for row in (settings.get("cs_warehouse_mapping") or []))
+    warehouses.discard("")
+    if not warehouses:
+        return []
+
+    stocked = frappe.get_all(
+        "Bin", filters={"warehouse": ["in", list(warehouses)], "actual_qty": [">", 0]}, fields=["item_code", "warehouse"]
+    )
+    if not stocked:
+        return []
+    from_cloudstore = set(frappe.get_all(
+        "Item", filters={"name": ["in", list({b.item_code for b in stocked})], "supplier_id": ["is", "set"]}, pluck="name"
+    ))
+    stocked = [b for b in stocked if b.item_code in from_cloudstore]
+    gone = [b for b in stocked if b.item_code not in seen_skus]
+    if len(gone) > _MAX_ZEROED_SHARE * len(stocked):
+        _append(log, f"Sold-out check skipped: it would zero {len(gone)} of {len(stocked)} stocked items.")
+        return []
+    return [{"item_code": b.item_code, "warehouse": b.warehouse, "qty": 0.0} for b in gone]
 
 
 def _only_changed(entries: list) -> list:
