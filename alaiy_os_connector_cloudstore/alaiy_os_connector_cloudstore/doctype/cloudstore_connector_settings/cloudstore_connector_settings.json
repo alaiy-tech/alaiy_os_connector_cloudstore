@@ -14,6 +14,7 @@
     "cs_sync_warehouse",
     "cs_warehouse_mapping",
     "cs_buying_price_list",
+    "cs_cost_price_list",
     "cs_price_list",
     "sb_schedule",
     "cs_page_size",
@@ -87,6 +88,13 @@
       "label": "Buying Price List",
       "options": "Price List",
       "reqd": 1
+    },
+    {
+      "description": "Price list that holds the supplier cost (sale_price, EUR). Optional: when empty, the cost is not stored.",
+      "fieldname": "cs_cost_price_list",
+      "fieldtype": "Link",
+      "label": "Cost Price List",
+      "options": "Price List"
     },
     {
       "description": "Price list for selling prices.",
