@@ -15,6 +15,9 @@ _INTERVAL_MINUTES = {
     "5 min": 5,
     "10 min": 10,
     "30 min": 30,
+    "1 hour": 60,
+    "6 hours": 360,
+    "1 day": 1440,
 }
 
 
