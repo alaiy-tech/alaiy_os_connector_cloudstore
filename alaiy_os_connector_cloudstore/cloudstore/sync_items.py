@@ -654,10 +654,11 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
 
 
 def _valuation_rate(item_code: str, warehouse: str):
-    """Valuation rate held for the item in the warehouse, else the item's own rate. None when neither is set."""
-    rate = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
+    """Item's own valuation rate (the supplier cost), else the rate held in the warehouse. None when neither is set.
+    The item's rate comes first so a stale warehouse rate is corrected by the next reconciliation."""
+    rate = frappe.db.get_value("Item", item_code, "valuation_rate")
     if not rate:
-        rate = frappe.db.get_value("Item", item_code, "valuation_rate")
+        rate = frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "valuation_rate")
     return float(rate) if rate else None
 
 
