@@ -438,6 +438,12 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     if buying_price_list and sku and buy_price:
         _upsert_price(sku, buying_price_list, buy_price)
 
+    # sale_price is the supplier cost (EUR). It goes in its own list so the buying
+    # list keeps holding the retail stock_price.
+    cost_price_list = (settings.cs_cost_price_list or "").strip()
+    if cost_price_list and sku and sale_price:
+        _upsert_price(sku, cost_price_list, sale_price)
+
     # ------------------------------------------------------------------
     # 4. Item Supplier linkage + extended attributes
     # ------------------------------------------------------------------
