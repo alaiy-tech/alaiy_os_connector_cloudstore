@@ -717,8 +717,7 @@ def _submit_stock_reconciliation(entries: list):
     )
     try:
         recon = _build_recon(stock_adjustment_account)
-        recon.insert()
-        recon.submit()
+        _insert_and_submit(recon)
     except frappe.ValidationError as exc:
         if "Opening Entry" not in str(exc):
             raise
@@ -728,10 +727,21 @@ def _submit_stock_reconciliation(entries: list):
         if not opening_account:
             raise
         recon = _build_recon(opening_account)
-        recon.insert()
-        recon.submit()
+        _insert_and_submit(recon)
     frappe.db.commit()
     return skipped
+
+
+def _insert_and_submit(recon):
+    """Insert and submit a reconciliation. If either step fails, the insert is undone, so a
+    failed run leaves no draft behind."""
+    frappe.db.savepoint("cs_stock_recon")
+    try:
+        recon.insert()
+        recon.submit()
+    except Exception:
+        frappe.db.rollback(save_point="cs_stock_recon")
+        raise
 
 
 # ---------------------------------------------------------------------------
