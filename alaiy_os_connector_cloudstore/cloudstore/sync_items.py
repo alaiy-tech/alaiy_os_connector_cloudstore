@@ -379,9 +379,10 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     else:
         variant = frappe.get_doc("Item", sku)
 
-    # ERPNext rejects changing Variant Of on an existing item, so the parent is
-    # set only when the item is new or has none yet.
-    if variant_is_new or not variant.variant_of:
+    # Variant Of is set-only-once in ERPNext: it can be written only when the item
+    # is created. Existing items keep whatever parent they have, even an empty one,
+    # so a save never tries to change it.
+    if variant_is_new:
         variant.variant_of = template_code
     variant.item_name = title
     if description:
