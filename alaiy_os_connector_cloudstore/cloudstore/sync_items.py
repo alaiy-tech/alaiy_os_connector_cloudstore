@@ -77,11 +77,16 @@ def run(trigger: str = "scheduled") -> str:
         stock_failed = ""
         stock_batch = []  # collect {"item_code", "warehouse", "qty"} dicts across all pages
 
-        for content, metadata in client.items.paginated():
+        seen_skus = set()
+
+        for content, metadata in _item_pages(client, settings):
             if log.pages_total == 0:
                 log.pages_total = int(metadata.get("total_pages", 0))
 
             for item_data in content:
+                if item_data.get("sku") in seen_skus:
+                    continue
+                seen_skus.add(item_data.get("sku"))
                 try:
                     action, stock_entries = _upsert_item(
                         item_data, settings, attr_cache, wh_cache, default_warehouse
@@ -622,6 +627,24 @@ def _resolve_warehouse_for_wh_id(wh_id: str, settings, cache: dict, default_ware
     frappe.db.commit()
     cache[wh_id] = default_warehouse
     return default_warehouse
+
+
+def _extra_parent_skus(settings) -> list:
+    """Parent SKUs from the Extra Parent SKUs setting, one per line or comma-separated."""
+    raw = (settings.get("cs_extra_parent_skus") or "").replace(",", "\n")
+    return [code.strip() for code in raw.splitlines() if code.strip()]
+
+
+def _item_pages(client, settings):
+    """Every page of the full item list, then one page for the extra parent SKUs in the
+    settings. Some styles are missing from the full list but are returned when asked for by code."""
+    yield from client.items.paginated()
+    parents = _extra_parent_skus(settings)
+    if parents:
+        reply = client.items.list_by_parent_skus(parents) or {}
+        rows = reply.get("content") if isinstance(reply, dict) else reply
+        if rows:
+            yield rows, {}
 
 
 def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, default_warehouse: str) -> list:

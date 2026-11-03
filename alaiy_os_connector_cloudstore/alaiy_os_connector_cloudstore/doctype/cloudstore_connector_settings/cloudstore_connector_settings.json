@@ -16,6 +16,7 @@
     "cs_buying_price_list",
     "cs_cost_price_list",
     "cs_price_list",
+    "cs_extra_parent_skus",
     "sb_schedule",
     "cs_page_size",
     "cs_category_sync_interval",
@@ -103,6 +104,12 @@
       "label": "Selling Price List",
       "options": "Price List",
       "reqd": 1
+    },
+    {
+      "description": "Parent SKUs (one per line or comma-separated) that the items sync also reads by code. Use it for styles that the full item list leaves out.",
+      "fieldname": "cs_extra_parent_skus",
+      "fieldtype": "Small Text",
+      "label": "Extra Parent SKUs"
     },
     {
       "fieldname": "sb_schedule",
