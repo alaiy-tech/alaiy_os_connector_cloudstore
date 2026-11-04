@@ -158,12 +158,15 @@ def _sold_out_entries(settings, seen_skus: set, log) -> list:
     codes = list({b.item_code for b in stocked})
     # A Cloudstore item has the supplier link, or a price in the connector's own buying list.
     # Items created by older syncs have the price but not the link.
-    from_cloudstore = set(frappe.get_all("Item", filters={"name": ["in", codes], "supplier_id": ["is", "set"]}, pluck="name"))
+    # Disabled items are skipped: ERPNext rejects a reconciliation row for a disabled item and
+    # the whole reconciliation would fail.
+    from_cloudstore = set(frappe.get_all("Item", filters={"name": ["in", codes], "supplier_id": ["is", "set"], "disabled": 0}, pluck="name"))
     buying_list = (settings.cs_buying_price_list or "").strip()
     if buying_list:
-        from_cloudstore |= set(frappe.get_all(
+        priced = frappe.get_all(
             "Item Price", filters={"price_list": buying_list, "item_code": ["in", codes]}, pluck="item_code"
-        ))
+        )
+        from_cloudstore |= set(frappe.get_all("Item", filters={"name": ["in", priced], "disabled": 0}, pluck="name"))
     stocked = [b for b in stocked if b.item_code in from_cloudstore]
     gone = [b for b in stocked if b.item_code not in seen_skus]
     if len(gone) > _MAX_ZEROED_SHARE * len(stocked):
