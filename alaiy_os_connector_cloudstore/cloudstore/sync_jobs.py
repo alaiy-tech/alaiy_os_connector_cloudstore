@@ -77,9 +77,15 @@ def _maybe_enqueue(interval_setting: str, sync_type: str, enqueue_fn: str):
         sync_type:        "categories", "items", "stock", "orders" or "events".
         enqueue_fn:       Dotted path to the Frappe-enqueue-able function.
     """
-    # "Disabled" or any unrecognised value — do nothing
+    if interval_setting in (None, "", "Disabled"):
+        return
     interval_minutes = _INTERVAL_MINUTES.get(interval_setting)
+    if not interval_minutes and str(interval_setting).strip().isdigit():
+        # A bare number (e.g. written through the API) means minutes.
+        interval_minutes = int(interval_setting)
     if not interval_minutes:
+        # Logger, not Error Log: this runs every minute and would flood it.
+        frappe.logger("cloudstore").warning(f"{sync_type}: interval '{interval_setting}' not recognised, sync skipped")
         return
 
     now = now_datetime()
