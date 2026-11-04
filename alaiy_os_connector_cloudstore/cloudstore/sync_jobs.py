@@ -112,4 +112,12 @@ def _maybe_enqueue(interval_setting: str, sync_type: str, enqueue_fn: str):
             return
 
     # Due — enqueue on the long queue
-    frappe.enqueue(enqueue_fn, queue="long", trigger="scheduled")
+    # job_id + deduplicate: the running-log guard above cannot see a job that is queued but
+    # not started yet, so without this a busy worker collects one copy per scheduler tick.
+    frappe.enqueue(
+        enqueue_fn,
+        queue="long",
+        job_id=f"cloudstore::{sync_type}",
+        deduplicate=True,
+        trigger="scheduled",
+    )
