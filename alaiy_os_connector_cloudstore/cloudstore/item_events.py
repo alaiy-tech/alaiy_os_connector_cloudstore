@@ -10,6 +10,7 @@ from alaiy_os_connector_cloudstore.cloudstore.sync_items import (
     _upsert_price,
     upsert_batch,
 )
+from alaiy_os_connector_cloudstore.cloudstore.sync_stock import _only_changed
 
 PRICE_EVENTS = ("ITEMS_PRICE_UPDATED", "ITEMS_AVAILABILITY_AND_PRICE_UPDATED")
 STOCK_EVENTS = ("ITEMS_AVAILABILITY_UPDATED", "ITEMS_AVAILABILITY_AND_PRICE_UPDATED")
@@ -55,6 +56,8 @@ def apply_item_event(event: dict, settings) -> str:
         done += 1
 
     stock_skipped = 0
+    # ERPNext throws when a reconciliation changes nothing, so submit only real differences.
+    stock_entries = _only_changed(stock_entries)
     if stock_entries:
         stock_skipped = _submit_stock_reconciliation(stock_entries)
     frappe.db.commit()
