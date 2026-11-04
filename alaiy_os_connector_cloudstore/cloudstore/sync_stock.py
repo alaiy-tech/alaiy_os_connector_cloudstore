@@ -188,7 +188,8 @@ def _only_changed(entries: list) -> list:
         current = (bin_row.actual_qty if bin_row else 0) or 0
         item_rate = frappe.db.get_value("Item", e["item_code"], "valuation_rate") or 0
         bin_rate = (bin_row.valuation_rate if bin_row else 0) or 0
-        rate_stale = bool(bin_row) and float(item_rate) > 0 and abs(float(bin_rate) - float(item_rate)) > 0.01
+        # A rate on an empty row creates no ledger entry, so it only counts when stock is held.
+        rate_stale = bool(bin_row) and float(e["qty"]) > 0 and float(item_rate) > 0 and abs(float(bin_rate) - float(item_rate)) > 0.01
         if float(current) != float(e["qty"]) or rate_stale:
             changed.append(e)
     return changed

@@ -701,6 +701,11 @@ def _submit_stock_reconciliation(entries: list):
     Returns the number of entries skipped because no valuation rate exists.
     Callers must treat a non-zero count as a failed stock update, not a success.
     """
+    # ERPNext throws "No stock ledger entries were created" when nothing changes, so every
+    # caller (full sync, on-demand batch, events) only submits real differences.
+    from alaiy_os_connector_cloudstore.cloudstore.sync_stock import _only_changed
+
+    entries = _only_changed(entries)
     rows = []
     skipped = 0
     for entry in entries:
