@@ -408,9 +408,6 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     variant.supplier_id = item_id_oid
     variant.sku_parent = sku_parent
     variant.last_synced_at = now_datetime()
-    # An item Cloudstore lists is for sale there. Enabling it brings back items an earlier
-    # removal event disabled, so they take stock again.
-    variant.disabled = 0
     if mnf_color:
         variant.manufacturer_color = mnf_color
     if hs_code:

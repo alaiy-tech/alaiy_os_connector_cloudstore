@@ -91,7 +91,6 @@ re-save sibling variants.
 | `supplier_id` | `item_id.$oid` |
 | `sku_parent`, `manufacturer_color`, `customs_tariff_number`, `country_of_origin` | same as template |
 | `last_synced_at` | time of the sync |
-| `disabled` | 0: an item Cloudstore lists is enabled again if an earlier removal event had disabled it |
 | attributes | one row: `Size` = size. The value is added to the Size attribute first if missing. |
 | `uoms` | row `Nos`, factor 1 |
 | `barcodes` | `props.mnf_barcode`, `props.ean`, `props.barcode`, each `barcodes[].code`, duplicates removed |
