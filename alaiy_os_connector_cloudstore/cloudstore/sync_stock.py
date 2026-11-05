@@ -22,12 +22,11 @@ from frappe.utils import now_datetime
 from alaiy_os_connector_cloudstore.cloudstore.client import CloudstoreClient
 from alaiy_os_connector_cloudstore.cloudstore.run_guard import skip_if_active
 from alaiy_os_connector_cloudstore.cloudstore.sync_items import (
+    RECONCILE_CHUNK as _RECONCILE_CHUNK,
     _build_stock_entries,
     _ensure_warehouse,
     _submit_stock_reconciliation,
 )
-
-_RECONCILE_CHUNK = 200
 
 
 def run(trigger: str = "scheduled") -> str:
@@ -201,19 +200,23 @@ def _store_cloudstore_stock(sku: str, supplier: str, item_data: dict):
     values = {
         "cloudstore_qty": str(item_data.get("qty") if item_data.get("qty") is not None else sum(w["qty"] or 0 for w in whs)),
         "cloudstore_stock": json.dumps(whs),
-        "cloudstore_stock_at": str(now_datetime()),
     }
-    for key, value in values.items():
-        _set_attribute(sku, supplier, key, value, only_if_changed=key != "cloudstore_stock_at")
+    changed = [_set_attribute(sku, supplier, key, value) for key, value in values.items()]
+    # The time moves only when the numbers do. Rewriting it for every item on every run is
+    # thousands of writes to the rows the items sync is saving, and they wait on each other.
+    if any(changed):
+        _set_attribute(sku, supplier, "cloudstore_stock_at", str(now_datetime()))
 
 
-def _set_attribute(item_code: str, supplier: str, key: str, value: str, only_if_changed: bool = True):
+def _set_attribute(item_code: str, supplier: str, key: str, value: str) -> bool:
+    """Write the attribute when it differs from what is stored. True when something was written."""
     filters = {"parent": item_code, "supplier": supplier, "connector_name": "cloudstore", "attribute_key": key}
     row = frappe.db.get_value("Item Supplier Attribute", filters, ["name", "attribute_value"], as_dict=True)
     if row:
-        if not (only_if_changed and row.attribute_value == value):
-            frappe.db.set_value("Item Supplier Attribute", row.name, "attribute_value", value, update_modified=False)
-        return
+        if row.attribute_value == value:
+            return False
+        frappe.db.set_value("Item Supplier Attribute", row.name, "attribute_value", value, update_modified=False)
+        return True
     frappe.get_doc({
         "doctype": "Item Supplier Attribute",
         "parent": item_code,
@@ -224,6 +227,7 @@ def _set_attribute(item_code: str, supplier: str, key: str, value: str, only_if_
         "attribute_key": key,
         "attribute_value": value,
     }).insert(ignore_permissions=True)
+    return True
 
 
 def _append(log, message: str):

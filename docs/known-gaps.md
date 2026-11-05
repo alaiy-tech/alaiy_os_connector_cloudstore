@@ -27,7 +27,7 @@ Behaviour that is missing or limited, as it is in the code.
 
 | Area | Fact |
 |---|---|
-| Removal | Items that disappear from Cloudstore stay in ERPNext during the item sync. Only the `ITEMS_REMOVED` event disables Items. |
+| Removal | Items that disappear from Cloudstore stay in ERPNext during the item sync. The `ITEMS_REMOVED` event sets their stock to 0 and does not disable them. |
 | Item Group | One Item Group per Item (the first category). All category ids are kept in the `category_ids` attribute. |
 | Language | Item name and description use English, or the first language present. Other languages are not kept. |
 | Price 0 | A price of 0 is skipped, so an existing price stays. |

@@ -21,7 +21,7 @@ Two rules hold for every feature:
 | Order push | Sales Order submit | Out | nothing | Sales Order tracking fields | `POST /orders` |
 | Order cancel | Sales Order cancel | Out | nothing | Sales Order status field | `DELETE /orders/{id}` |
 | Order status refresh | Schedule or API call | In | `GET /orders/findByShopOrderId` | Sales Order status field | nothing |
-| Events | Schedule or API call | In | `GET /events` | Sales Order fields, Item Price, Stock Reconciliation, Item (`disabled`), Item (catalogue update) | nothing |
+| Events | Schedule or API call | In | `GET /events` | Sales Order fields, Item Price, Stock Reconciliation, Item (catalogue update) | nothing |
 | Search and lookup | API call | In | `listBySearchTerm`, `listByCode` | nothing | nothing |
 | Single-item sync | API call | In | `findByCode`, `listByParentSKUList` | same as item sync | nothing |
 | Filtered sync | API call | In | `POST /v2/items/listParentsByFilter` | same as item sync | nothing |
