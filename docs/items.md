@@ -20,10 +20,14 @@ Code: `cloudstore/sync_items.py`, `cloudstore/item_attributes.py`. Trigger:
    page size from settings). For each item it calls `_upsert_item` inside a
    try block. An exception is logged as `ERROR sku=<sku>: <message>`, counted in
    `items_failed`, written to Error Log, and the loop continues.
+   The transaction is committed after every item, so row locks are not held
+   while the stock and events jobs run. The Supplier row and the supplier
+   attributes of an Item are saved only when their content changed, and saving
+   them does not trigger ERPNext's background re-save of the template's variants.
 8. After each page: updates `pages_done`, `items_processed`, `items_created`,
    `items_updated`, `items_failed`, saves the log, commits.
-9. After the last page: one Stock Reconciliation for all collected stock
-   entries (see [stock.md](stock.md)).
+9. After the last page: the collected stock entries as Stock Reconciliations of
+   200 rows each (see [stock.md](stock.md)).
 10. `status=success`, or `failed` with `error_message` when the reconciliation
     failed ("Items synced but stock was not updated: ...") or any other
     exception was raised. `finished_at` is set in all cases.

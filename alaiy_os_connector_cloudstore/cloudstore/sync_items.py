@@ -17,6 +17,10 @@ from alaiy_os_connector_cloudstore.cloudstore.item_attributes import build_suppl
 # Item Supplier Attribute keys written by the stock sync (sync_stock.py).
 STOCK_ATTRIBUTE_KEYS = ("cloudstore_qty", "cloudstore_stock", "cloudstore_stock_at")
 
+# Rows per Stock Reconciliation. One document for a whole catalogue exceeds the number of
+# database writes Frappe allows in a single transaction, so every caller submits in chunks.
+RECONCILE_CHUNK = 200
+
 
 def run(trigger: str = "scheduled") -> str:
     """
@@ -106,6 +110,9 @@ def run(trigger: str = "scheduled") -> str:
                         title=f"Cloudstore item sync error: {sku}",
                         message=frappe.get_traceback(),
                     )
+                # Release the row locks after every item. The stock and events jobs run
+                # while this one does and wait on any lock held until the end of a page.
+                frappe.db.commit()
 
             log.pages_done += 1
             log.items_processed = stats["processed"]
@@ -117,12 +124,10 @@ def run(trigger: str = "scheduled") -> str:
 
         # One Stock Reconciliation for all synced variants — far cheaper than
         # one per variant. Each entry already carries its own resolved warehouse.
-        if stock_batch:
+        skipped = 0
+        for i in range(0, len(stock_batch), RECONCILE_CHUNK):
             try:
-                skipped = _submit_stock_reconciliation(stock_batch)
-                if skipped:
-                    _append_log(log, f"ERROR: {skipped} stock row(s) skipped: no valuation rate in ERPNext.")
-                    stock_failed = f"{skipped} stock row(s) skipped: no valuation rate"
+                skipped += _submit_stock_reconciliation(stock_batch[i:i + RECONCILE_CHUNK])
             except Exception as exc:
                 _append_log(log, f"ERROR: Stock Reconciliation failed: {exc}")
                 stock_failed = str(exc)
@@ -130,6 +135,9 @@ def run(trigger: str = "scheduled") -> str:
                     title="Cloudstore: stock reconciliation failed",
                     message=frappe.get_traceback(),
                 )
+        if skipped and not stock_failed:
+            _append_log(log, f"ERROR: {skipped} stock row(s) skipped: no valuation rate in ERPNext.")
+            stock_failed = f"{skipped} stock row(s) skipped: no valuation rate"
 
         if stock_failed:
             log.status = "failed"
@@ -552,6 +560,8 @@ def _upsert_item_supplier(item_code: str, supplier: str, supplier_part_no: str):
     item = frappe.get_doc("Item", item_code)
     existing = [r for r in (item.supplier_items or []) if r.supplier == supplier]
     if existing:
+        if existing[0].supplier_part_no == supplier_part_no:
+            return  # nothing to change: a save would rewrite the item and lock it for nothing
         existing[0].supplier_part_no = supplier_part_no
     else:
         item.append("supplier_items", {
@@ -559,6 +569,9 @@ def _upsert_item_supplier(item_code: str, supplier: str, supplier_part_no: str):
             "supplier_part_no": supplier_part_no,
         })
     item.flags.ignore_validate = True
+    # Saving a template makes ERPNext re-save every variant in a background job, which
+    # collides with this sync saving those variants.
+    item.flags.dont_update_variants = True
     item.save(ignore_permissions=True)
 
 
@@ -567,22 +580,31 @@ def _upsert_supplier_attributes(item_code: str, supplier: str, attrs: dict):
     if not supplier or not frappe.db.exists("DocType", "Item Supplier Attribute"):
         return
     item = frappe.get_doc("Item", item_code)
+    rows = getattr(item, "supplier_attributes", None) or []
+    wanted = {key: str(value) for key, value in attrs.items() if value}
+    current = {
+        r.attribute_key: r.attribute_value
+        for r in rows
+        if r.supplier == supplier and r.connector_name == "cloudstore" and r.attribute_key not in STOCK_ATTRIBUTE_KEYS
+    }
+    if current == wanted:
+        return  # unchanged: rewriting the rows would lock the item and the stock job's rows for nothing
     # Replace existing rows for this connector so we don't accumulate duplicates.
     # The cloudstore_* stock rows belong to the stock sync and are kept.
     item.set("supplier_attributes", [
-        r for r in (getattr(item, "supplier_attributes", None) or [])
+        r for r in rows
         if not (r.supplier == supplier and r.connector_name == "cloudstore")
         or r.attribute_key in STOCK_ATTRIBUTE_KEYS
     ])
-    for key, value in attrs.items():
-        if value:
-            item.append("supplier_attributes", {
-                "supplier": supplier,
-                "connector_name": "cloudstore",
-                "attribute_key": key,
-                "attribute_value": str(value),
-            })
+    for key, value in wanted.items():
+        item.append("supplier_attributes", {
+            "supplier": supplier,
+            "connector_name": "cloudstore",
+            "attribute_key": key,
+            "attribute_value": value,
+        })
     item.flags.ignore_validate = True
+    item.flags.dont_update_variants = True  # see _upsert_item_supplier
     item.save(ignore_permissions=True)
 
 
@@ -661,7 +683,7 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
         return [{
             "item_code": sku,
             "warehouse": default_warehouse,
-            "qty": float(item_data.get("qty") or 0),
+            "qty": _non_negative(item_data.get("qty")),
         }]
 
     entries = []
@@ -671,9 +693,15 @@ def _build_stock_entries(sku: str, item_data: dict, settings, wh_cache: dict, de
         entries.append({
             "item_code": sku,
             "warehouse": warehouse,
-            "qty": float(row.get("qty") or 0),
+            "qty": _non_negative(row.get("qty")),
         })
     return entries
+
+
+def _non_negative(qty) -> float:
+    """Cloudstore can report a negative quantity when it is oversold. ERPNext rejects a negative
+    reconciliation row, so the stock is held at 0."""
+    return max(float(qty or 0), 0.0)
 
 
 def _valuation_rate(item_code: str, warehouse: str):
@@ -705,7 +733,10 @@ def _submit_stock_reconciliation(entries: list):
     # caller (full sync, on-demand batch, events) only submits real differences.
     from alaiy_os_connector_cloudstore.cloudstore.sync_stock import _only_changed
 
-    entries = _only_changed(entries)
+    # ERPNext rejects a reconciliation row for a disabled item, which fails the whole document.
+    codes = list({e["item_code"] for e in entries})
+    disabled = set(frappe.get_all("Item", filters={"name": ["in", codes], "disabled": 1}, pluck="name")) if codes else set()
+    entries = _only_changed([e for e in entries if e["item_code"] not in disabled])
     rows = []
     skipped = 0
     for entry in entries:
@@ -749,6 +780,8 @@ def _submit_stock_reconciliation(entries: list):
         recon = _build_recon(stock_adjustment_account)
         _insert_and_submit(recon)
     except frappe.ValidationError as exc:
+        if _changes_nothing(exc):
+            return skipped
         if "Opening Entry" not in str(exc):
             raise
         opening_account = frappe.db.get_value(
@@ -757,9 +790,23 @@ def _submit_stock_reconciliation(entries: list):
         if not opening_account:
             raise
         recon = _build_recon(opening_account)
-        _insert_and_submit(recon)
+        try:
+            _insert_and_submit(recon)
+        except frappe.ValidationError as retry_exc:
+            if _changes_nothing(retry_exc):
+                return skipped
+            raise
     frappe.db.commit()
     return skipped
+
+
+def _changes_nothing(exc) -> bool:
+    """True when ERPNext refused the reconciliation because no row would change stock or value.
+    The stock already matches, so this is the outcome we want and not a failure."""
+    return (
+        type(exc).__name__ == "EmptyStockReconciliationItemsError"
+        or "No stock ledger entries were created" in str(exc)
+    )
 
 
 def _insert_and_submit(recon):

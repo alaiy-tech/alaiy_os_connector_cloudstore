@@ -35,7 +35,7 @@ The connector does not call it.
 | `ITEMS_AVAILABILITY_UPDATED` | Stock Reconciliation | see below |
 | `ITEMS_AVAILABILITY_AND_PRICE_UPDATED` | both of the above | see below |
 | `ITEMS_CATALOG_UPDATED` | catalogue update of the item | see below |
-| `ITEMS_REMOVED` | Items disabled | see below |
+| `ITEMS_REMOVED` | Stock set to 0 | see below |
 | any other type | nothing | `type not handled` |
 
 ### Matching a Sales Order: `apply_order_event`
@@ -64,7 +64,7 @@ skipped.
 | price types | `sale_price` to the Selling Price List and `stock_price` to the Buying Price List, each only when the value is above 0 and the list is set |
 | stock types | one Stock Reconciliation with `qty` per row on the single warehouse, only when all Cloudstore stock maps to one ERPNext warehouse (the Warehouse Mapping targets plus the Default Sync Warehouse form exactly one name). With more than one warehouse nothing is written and the line says: `Stock not applied: Cloudstore stock maps to more than one warehouse, next full sync sets it.` An event quantity is a total with no warehouse split. |
 | `ITEMS_CATALOG_UPDATED` | rows with an `item` object are stored through `upsert_batch` like an item sync; rows without are reported as `without item data` |
-| `ITEMS_REMOVED` | `Item.disabled` = 1 for each row, with `frappe.db.set_value` (no hooks) |
+| `ITEMS_REMOVED` | a Stock Reconciliation setting the stock of each row to 0 in every mapped warehouse. Cloudstore sends this event when an item leaves the catalogue and also when its quantity is set to 0, and the payload does not say which, so the Item is not disabled. |
 
 Result line: `<type>: <n> item(s) applied, <n> not in ERPNext.` The applied count
 is the number of rows that matched an Item.

@@ -44,10 +44,19 @@ in ERPNext since the last run (sales, receipts) are overwritten.
 
 ## In the item sync
 
-`sync_items.run` collects entries of all items and submits one reconciliation
-for all of them at the end, whether or not the quantity changed. If it fails
-the run gets `status=failed` and the log line `ERROR: Stock Reconciliation
-failed: ...`; items already saved stay saved.
+`sync_items.run` collects entries of all items and submits them at the end in
+reconciliations of 200 rows each (one document for a whole catalogue exceeds
+the number of writes Frappe allows in one transaction). Only rows whose quantity
+or valuation rate changed are submitted. If a chunk fails the run gets
+`status=failed` and the log line `ERROR: Stock Reconciliation failed: ...`;
+items already saved stay saved.
+
+Rules for every reconciliation, from any caller:
+
+- Rows for a disabled Item are left out, because ERPNext rejects them.
+- A negative quantity from Cloudstore is held at 0.
+- When ERPNext reports that no row would change stock or value, the call
+  returns without error: the stock already matches.
 
 ## Stock-only sync: `cloudstore/sync_stock.py`
 
@@ -88,11 +97,10 @@ name `cloudstore`:
 |---|---|
 | `cloudstore_qty` | `qty` of the item, or the sum over `whs[]` when `qty` is missing |
 | `cloudstore_stock` | JSON list `[{"wh_id": ..., "qty": ...}]` |
-| `cloudstore_stock_at` | time of the run; rewritten every run |
+| `cloudstore_stock_at` | time of the last run in which `cloudstore_qty` or `cloudstore_stock` changed |
 
-`cloudstore_qty` and `cloudstore_stock` are written only when the value
-changed. The item sync keeps these three rows when it replaces the other
-Cloudstore attribute rows.
+All three are written only when something changed. The item sync keeps these
+three rows when it replaces the other Cloudstore attribute rows.
 
 These rows hold Cloudstore's number. ERPNext's own stock can differ after sales.
 

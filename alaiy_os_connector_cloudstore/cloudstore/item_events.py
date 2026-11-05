@@ -6,6 +6,7 @@
 import frappe
 
 from alaiy_os_connector_cloudstore.cloudstore.sync_items import (
+    _non_negative,
     _submit_stock_reconciliation,
     _upsert_price,
     upsert_batch,
@@ -27,7 +28,9 @@ def apply_item_event(event: dict, settings) -> str:
       warehouse split, so with several mapped warehouses it is left to the
       next full sync instead of being put in the wrong place.
     - catalogue events: the full item the event carries is stored like a sync
-    - removed events: the Items are disabled
+    - removed events: the stock of the Items is set to 0 in every mapped warehouse. Cloudstore
+      sends this event both when an item leaves the catalogue and when its quantity is set to 0,
+      and the payload does not say which, so the Item stays enabled and can be restocked.
     """
     event_type = event.get("type")
     rows = event.get("items") or []
@@ -48,11 +51,11 @@ def apply_item_event(event: dict, settings) -> str:
             skipped += 1
             continue
         if event_type == "ITEMS_REMOVED":
-            frappe.db.set_value("Item", item_code, "disabled", 1)
+            stock_entries += [{"item_code": item_code, "warehouse": wh, "qty": 0.0} for wh in _warehouses(settings)]
         if event_type in PRICE_EVENTS:
             _apply_prices(item_code, row, settings)
         if event_type in STOCK_EVENTS and row.get("qty") is not None and warehouse:
-            stock_entries.append({"item_code": item_code, "warehouse": warehouse, "qty": float(row["qty"])})
+            stock_entries.append({"item_code": item_code, "warehouse": warehouse, "qty": _non_negative(row["qty"])})
         done += 1
 
     stock_skipped = 0
@@ -86,8 +89,13 @@ def _item_code(row: dict) -> str:
     return frappe.db.get_value("Item", {"supplier_id": oid}, "name") if oid else ""
 
 
-def _single_warehouse(settings):
+def _warehouses(settings) -> set:
     names = {r.warehouse for r in (settings.cs_warehouse_mapping or []) if r.warehouse}
     if settings.cs_sync_warehouse:
         names.add(settings.cs_sync_warehouse)
+    return names
+
+
+def _single_warehouse(settings):
+    names = _warehouses(settings)
     return next(iter(names)) if len(names) == 1 else None
