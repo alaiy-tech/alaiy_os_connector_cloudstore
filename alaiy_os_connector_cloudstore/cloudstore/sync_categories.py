@@ -23,7 +23,7 @@ def run(trigger: str = "scheduled") -> str:
     Returns:
         The name (ID) of the Cloudstore Sync Log document.
     """
-    skipped = skip_if_active("categories", trigger)
+    skipped = skip_if_active("categories", trigger, check_disk=True)
     if skipped:
         return skipped
 

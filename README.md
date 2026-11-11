@@ -33,6 +33,12 @@ until **Send Sales Orders to Cloudstore** is set.
 4. Enable the connector and save.
 5. Run **Sync Category Tree**, then **Sync Items**.
 
+### Disk guard
+
+The items and categories syncs skip a run, and say so on the sync log, when free disk is below 1 GB,
+so a sync never writes the last of a server's space. Change the floor with `cloudstore_min_free_gb`
+in the site config; `0` turns the guard off. Stock, orders and events are not affected.
+
 ## Documentation
 
 Technical docs are in [docs/](docs/index.md).
