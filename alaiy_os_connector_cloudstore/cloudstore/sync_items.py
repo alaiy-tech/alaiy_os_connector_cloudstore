@@ -16,10 +16,27 @@ from alaiy_os_connector_cloudstore.cloudstore.item_attributes import build_suppl
 
 # Item Supplier Attribute keys written by the stock sync (sync_stock.py).
 STOCK_ATTRIBUTE_KEYS = ("cloudstore_qty", "cloudstore_stock", "cloudstore_stock_at")
+# Failed items are all counted and listed on the sync log, but only this many get a full
+# traceback in the Error Log per run: a run where every item fails would otherwise write one
+# large row per item, every run.
+MAX_ERROR_TRACEBACKS = 20
 
 # Rows per Stock Reconciliation. One document for a whole catalogue exceeds the number of
 # database writes Frappe allows in a single transaction, so every caller submits in chunks.
 RECONCILE_CHUNK = 200
+
+
+def _final_status(stats: dict, stock_failed: str):
+    """(status, error message) for a finished items run.
+
+    A run where every item failed is a failure, not a success: nothing was synced and a
+    "success" hides it. Some failures among successes stay a success, with the failures
+    counted on the log."""
+    if stats["failed"] and not stats["processed"]:
+        return "failed", f"Every item failed ({stats['failed']}); the first errors are in the log."
+    if stock_failed:
+        return "failed", f"Items synced but stock was not updated: {stock_failed}"[:1000]
+    return "success", ""
 
 
 def run(trigger: str = "scheduled") -> str:
@@ -38,7 +55,7 @@ def run(trigger: str = "scheduled") -> str:
     Returns:
         The name (ID) of the Cloudstore Sync Log document.
     """
-    skipped = skip_if_active("items", trigger)
+    skipped = skip_if_active("items", trigger, check_disk=True)
     if skipped:
         return skipped
 
@@ -106,10 +123,11 @@ def run(trigger: str = "scheduled") -> str:
                     sku = item_data.get("sku", "unknown")
                     stats["failed"] += 1
                     _append_log(log, f"ERROR sku={sku}: {exc}")
-                    frappe.log_error(
-                        title=f"Cloudstore item sync error: {sku}",
-                        message=frappe.get_traceback(),
-                    )
+                    if stats["failed"] <= MAX_ERROR_TRACEBACKS:
+                        frappe.log_error(
+                            title=f"Cloudstore item sync error: {sku}",
+                            message=frappe.get_traceback(),
+                        )
                 # Release the row locks after every item. The stock and events jobs run
                 # while this one does and wait on any lock held until the end of a page.
                 frappe.db.commit()
@@ -139,11 +157,9 @@ def run(trigger: str = "scheduled") -> str:
             _append_log(log, f"ERROR: {skipped} stock row(s) skipped: no valuation rate in ERPNext.")
             stock_failed = f"{skipped} stock row(s) skipped: no valuation rate"
 
-        if stock_failed:
-            log.status = "failed"
-            log.error_message = f"Items synced but stock was not updated: {stock_failed}"[:1000]
-        else:
-            log.status = "success"
+        log.status, message = _final_status(stats, stock_failed)
+        if message:
+            log.error_message = message
 
     except Exception as exc:
         log.status = "failed"
@@ -375,7 +391,9 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     if template_is_new:
         template.insert(ignore_permissions=True)
     else:
-        template.save(ignore_permissions=True)
+        # ignore_version: the sync stamps every item each run, and a history row per save
+        # grows without bound. A person's own edit still records history.
+        template.save(ignore_permissions=True, ignore_version=True)
 
     # ------------------------------------------------------------------
     # 2. Variant item — only Size varies across variants of one template
@@ -438,7 +456,7 @@ def _upsert_item(item_data: dict, settings, attr_cache: dict, wh_cache: dict, de
     if variant_is_new:
         variant.insert(ignore_permissions=True)
     else:
-        variant.save(ignore_permissions=True)
+        variant.save(ignore_permissions=True, ignore_version=True)  # see the template save
 
     # ------------------------------------------------------------------
     # 3. Item Prices
@@ -514,7 +532,8 @@ def upsert_batch(items: list) -> dict:
             sku = item_data.get("sku", "unknown")
             stats["failed"] += 1
             stats["errors"].append(f"{sku}: {exc}")
-            frappe.log_error(title=f"Cloudstore item sync error: {sku}", message=frappe.get_traceback())
+            if stats["failed"] <= MAX_ERROR_TRACEBACKS:
+                frappe.log_error(title=f"Cloudstore item sync error: {sku}", message=frappe.get_traceback())
         frappe.db.commit()
 
     if stock_batch:
