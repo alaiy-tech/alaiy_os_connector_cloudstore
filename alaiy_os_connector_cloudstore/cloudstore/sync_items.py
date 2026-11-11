@@ -558,7 +558,7 @@ def _upsert_price(item_code: str, price_list: str, rate: float):
     if existing:
         price_doc = frappe.get_doc("Item Price", existing)
         price_doc.price_list_rate = rate
-        price_doc.save(ignore_permissions=True)
+        price_doc.save(ignore_permissions=True, ignore_version=True)  # rewritten every run
     else:
         price_doc = frappe.new_doc("Item Price")
         price_doc.item_code = item_code
@@ -591,7 +591,7 @@ def _upsert_item_supplier(item_code: str, supplier: str, supplier_part_no: str):
     # Saving a template makes ERPNext re-save every variant in a background job, which
     # collides with this sync saving those variants.
     item.flags.dont_update_variants = True
-    item.save(ignore_permissions=True)
+    item.save(ignore_permissions=True, ignore_version=True)  # rewritten every run
 
 
 def _upsert_supplier_attributes(item_code: str, supplier: str, attrs: dict):
@@ -624,7 +624,7 @@ def _upsert_supplier_attributes(item_code: str, supplier: str, attrs: dict):
         })
     item.flags.ignore_validate = True
     item.flags.dont_update_variants = True  # see _upsert_item_supplier
-    item.save(ignore_permissions=True)
+    item.save(ignore_permissions=True, ignore_version=True)  # rewritten every run
 
 
 # ---------------------------------------------------------------------------
@@ -944,7 +944,7 @@ def _upsert_slideshow(item_code: str, primary_url: str, extra_urls: list):
     if ss.is_new():
         ss.insert(ignore_permissions=True)
     else:
-        ss.save(ignore_permissions=True)
+        ss.save(ignore_permissions=True, ignore_version=True)  # rewritten every run
 
     # Link slideshow to the template item
     frappe.db.set_value("Item", item_code, "slideshow", slideshow_name)
