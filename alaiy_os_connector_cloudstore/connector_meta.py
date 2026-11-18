@@ -43,6 +43,8 @@ connector_meta = {
     "sync_items_label": "Items",
     "is_enabled": 0,
     "connection_status": "untested",
+    # Extra check on the Connector Health page: a sample of items compared with a live lookup.
+    "health_method": "alaiy_os_connector_cloudstore.cloudstore.health.stock_freshness",
     "health": [
         _health("items", "Items sync", "items", "cs_items_sync_interval"),
         _health("stock", "Stock sync", "stock", "cs_stock_sync_interval"),
