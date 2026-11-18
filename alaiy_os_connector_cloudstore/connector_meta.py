@@ -3,6 +3,29 @@ Single source of truth for this connector's registration metadata.
 Consumed by setup/install.py → upserted into alaiy_os's OS Connector Registry.
 """
 
+# Columns of Cloudstore Sync Log, named the way the Connector Health page reads them.
+_LOG_FIELDS = {
+    "processed": "items_processed",
+    "changed": ["items_created", "items_updated"],
+    "failed": "items_failed",
+    "error": "error_message",
+}
+
+
+def _health(key, label, sync_type, interval_setting, expects_rows=True):
+    return {
+        "key": key,
+        "label": label,
+        "direction": "pull",
+        "log_doctype": "Cloudstore Sync Log",
+        "log_filter": {"sync_type": sync_type},
+        "fields": _LOG_FIELDS,
+        "interval_setting": interval_setting,
+        "scheduled": True,
+        "expects_rows": expects_rows,
+    }
+
+
 connector_meta = {
     "connector_id": "cloudstore",
     "connector_name": "Cloudstore",
@@ -20,4 +43,12 @@ connector_meta = {
     "sync_items_label": "Items",
     "is_enabled": 0,
     "connection_status": "untested",
+    "health": [
+        _health("items", "Items sync", "items", "cs_items_sync_interval"),
+        _health("stock", "Stock sync", "stock", "cs_stock_sync_interval"),
+        _health("categories", "Category sync", "categories", "cs_category_sync_interval"),
+        # Orders and events can legitimately have nothing to do.
+        _health("orders", "Orders sync", "orders", "cs_orders_sync_interval", expects_rows=False),
+        _health("events", "Events sync", "events", "cs_events_sync_interval", expects_rows=False),
+    ],
 }
